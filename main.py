@@ -227,6 +227,13 @@ parser.add_argument("--beam_size", type=int, default=0,
                     help="Beam width (<= 0 means greedy)")
 parser.add_argument("--length_penalty", type=float, default=1.0,
                     help="Length penalty: <1.0 favors shorter, >1.0 favors longer sentences")
+
+# VAE params
+parser.add_argument("--variational", type=bool_flag, default=False,
+                    help="Use variational model. Default False")
+parser.add_argument("--lambda_vae", type=str, default="1",
+                    help="Variational loss coefficient")
+
 params = parser.parse_args()
 
 
@@ -239,7 +246,7 @@ if __name__ == '__main__':
 
     # initialize experiment / load data / build model
     logger = initialize_exp(params)
-    data = load_data(params, mono_only=True)
+    data = load_data(params)
     encoder, decoder, discriminator, lm = build_mt_model(params, data)
 
     # initialize trainer / reload checkpoint / initialize evaluator
@@ -319,7 +326,7 @@ if __name__ == '__main__':
                 trainer.gen_time += time.time() - before_gen
 
                 # training
-                logger.info("HI num back-translation batches: %d", len(batches))
+                # logger.info("HI num back-translation batches: %d", len(batches))
                 for batch in batches:
                     lang1, lang2, lang3 = batch['lang1'], batch['lang2'], batch['lang3']
                     # 2-lang back-translation - autoencoding
