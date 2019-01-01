@@ -73,7 +73,13 @@ class TransformerEncoder(nn.Module):
                 else:
                     self.layers[k].append(TransformerEncoderLayer(args))
 
-    def forward(self, src_tokens, src_lengths, lang_id):
+        self.variational = args.variational
+        if self.variational:
+            self.var_ff = nn.Linear(args.encoder_embed_dim, args.encoder_embed_dim*2)
+
+
+
+    def forward(self, src_tokens, src_lengths, lang_id, noise=None):
         assert type(lang_id) is int
 
         embed_tokens = self.embeddings[lang_id]
@@ -91,6 +97,33 @@ class TransformerEncoder(nn.Module):
         for layer in self.layers:
             x = layer[lang_id](x, encoder_padding_mask)
 
+        if self.variational:
+            x = self.var_ff(x)
+            x_mean, x_logvar = torch.split(x, int(x.size(2)/2), dim=2)
+            # print(x_out)
+            x_std = torch.exp(0.5*x_logvar)
+            if noise is None:
+                noise = torch.randn_like(x_std)
+            elif noise is 0:
+                noise = torch.zeros_like(x_std)
+            x = noise.mul(x_std).add_(x_mean)
+
+            return LatentState(
+                input_len=src_lengths,
+                dec_input={
+                    'encoder_out': x,  # T x B x C
+                    'encoder_padding_mask': encoder_padding_mask,  # B x T
+                },
+                dis_input=x,
+                vae_vars={
+                    'mean': x_mean,
+                    'logvar': x_logvar,
+                    'noise': noise
+                }
+            )#, x_mean, x_logvar, noise
+
+            # return x, x_mean, x_logvar, noise
+
         return LatentState(
             input_len=src_lengths,
             dec_input={
@@ -98,6 +131,7 @@ class TransformerEncoder(nn.Module):
                 'encoder_padding_mask': encoder_padding_mask,  # B x T
             },
             dis_input=x,
+            vae_vars=None
         )
 
     def max_positions(self):

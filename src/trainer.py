@@ -22,6 +22,8 @@ from .test import test_sharing
 
 logger = getLogger()
 
+def VAELoss(mean, logvar, norm):
+    return -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp()) / norm
 
 class TrainerMT(MultiprocessingEventLoop):
 
@@ -139,6 +141,8 @@ class TrainerMT(MultiprocessingEventLoop):
         parse_lambda_config(params, 'lambda_xe_otfa')
         parse_lambda_config(params, 'lambda_dis')
         parse_lambda_config(params, 'lambda_lm')
+
+        parse_lambda_config(params, 'lambda_vae')
 
     def init_bpe(self):
         """
@@ -466,6 +470,12 @@ class TrainerMT(MultiprocessingEventLoop):
 
         # encoded states
         encoded = self.encoder(sent1, len1, lang1_id)
+
+        # variational encoding + loss
+        if params.variational:
+            vae_vars = encoded.vae_vars
+            vae_loss = VAELoss(vae_vars['mean'], vae_vars['logvar'], n_words) # is it actually n_words?
+    
         self.stats['enc_norms_%s' % lang1].append(encoded.dis_input.data.norm(2, 1).mean())
 
         # cross-entropy scores / loss
@@ -489,6 +499,9 @@ class TrainerMT(MultiprocessingEventLoop):
         loss = lambda_xe * xe_loss
         if params.lambda_dis:
             loss = loss + params.lambda_dis * dis_loss
+
+        if params.variational:
+            loss = loss + params.lambda_vae * vae_loss
 
         # check NaN
         if (loss != loss).data.any():

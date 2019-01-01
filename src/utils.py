@@ -308,6 +308,9 @@ def update_lambdas(params, n_total_iter):
     if params.lambda_lm_config is not None:
         params.lambda_lm = update_lambda_value(params.lambda_lm_config, n_total_iter)
 
+    if params.lambda_vae_config is not None:
+        params.lambda_vae = update_lambda_value(params.lambda_vae_config, n_total_iter)
+
 
 def get_mask(lengths, all_words, expand=None, ignore_first=False, batch_first=False, cuda=True):
     """
