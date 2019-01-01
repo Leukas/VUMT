@@ -469,13 +469,17 @@ class TrainerMT(MultiprocessingEventLoop):
         sent1, sent2 = sent1.cuda(), sent2.cuda()
 
         # encoded states
-        encoded = self.encoder(sent1, len1, lang1_id)
+        if lang1 == lang2:
+            encoded = self.encoder(sent1, len1, lang1_id, noise=0)
+        else:
+            encoded = self.encoder(sent1, len1, lang1_id)
 
         # variational encoding + loss
         if params.variational:
             vae_vars = encoded.vae_vars
-            vae_loss = VAELoss(vae_vars['mean'], vae_vars['logvar'], n_words) # is it actually n_words?
-    
+            n_tokens = torch.sum(len1).type_as(vae_vars['mean'])
+            vae_loss = VAELoss(vae_vars['mean'], vae_vars['logvar'], n_tokens)
+
         self.stats['enc_norms_%s' % lang1].append(encoded.dis_input.data.norm(2, 1).mean())
 
         # cross-entropy scores / loss
