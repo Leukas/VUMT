@@ -23,7 +23,10 @@ from .test import test_sharing
 logger = getLogger()
 
 def VAELoss(mean, logvar, norm):
-    return -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp()) / norm
+    x = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
+    norm =  torch.prod(torch.Tensor(list(logvar.size()))).type_as(logvar)#norm
+    # z = y
+    return x / norm #-0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp()) / norm
 
 class TrainerMT(MultiprocessingEventLoop):
 
