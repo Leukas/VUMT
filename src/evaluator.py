@@ -150,7 +150,7 @@ class EvaluatorMT(object):
             sent1, sent2 = sent1.cuda(), sent2.cuda()
 
             # encode / decode / generate
-            encoded = self.encoder(sent1, len1, lang1_id)
+            encoded = self.encoder(sent1, len1, lang1_id, noise=0)
             decoded = self.decoder(encoded, sent2[:-1], lang2_id)
             sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
 
