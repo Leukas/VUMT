@@ -479,6 +479,7 @@ class TrainerMT(MultiprocessingEventLoop):
             vae_vars = encoded.vae_vars
             n_tokens = torch.sum(len1).type_as(vae_vars['mean'])
             vae_loss = VAELoss(vae_vars['mean'], vae_vars['logvar'], n_tokens)
+            # logger.info("VAE LOSS %.4f" % vae_loss.item())
 
         self.stats['enc_norms_%s' % lang1].append(encoded.dis_input.data.norm(2, 1).mean())
 
@@ -489,6 +490,9 @@ class TrainerMT(MultiprocessingEventLoop):
             self.stats['xe_costs_bt_%s_%s' % (lang1, lang2)].append(xe_loss.item())
         else:
             self.stats['xe_costs_%s_%s' % (lang1, lang2)].append(xe_loss.item())
+
+        # logger.info("XE LOSS %.4f" % xe_loss)
+
 
         # discriminator feedback loss
         if params.lambda_dis:
@@ -655,6 +659,7 @@ class TrainerMT(MultiprocessingEventLoop):
                     ('lang1', lang1), ('sent1', sent1), ('len1', len1),
                     ('lang2', lang2), ('sent2', sent2), ('len2', len2),
                     ('lang3', lang3), ('sent3', sent3), ('len3', len3),
+                    ('vae_noise', encoded.vae_vars['noise']),
                 ]))
 
         return (rank, results)
@@ -667,6 +672,7 @@ class TrainerMT(MultiprocessingEventLoop):
         lang1, sent1, len1 = batch['lang1'], batch['sent1'], batch['len1']
         lang2, sent2, len2 = batch['lang2'], batch['sent2'], batch['len2']
         lang3, sent3, len3 = batch['lang3'], batch['sent3'], batch['len3']
+        vae_noise = batch['vae_noise']
         if lambda_xe == 0:
             logger.warning("Unused generated CPU batch for direction %s-%s-%s!" % (lang1, lang2, lang3))
             return
@@ -687,10 +693,10 @@ class TrainerMT(MultiprocessingEventLoop):
 
         if backprop_temperature == -1:
             # lang2 -> lang3
-            encoded = self.encoder(sent2, len2, lang_id=lang2_id)
+            encoded = self.encoder(sent2, len2, lang_id=lang2_id, noise=-vae_noise)
         else:
             # lang1 -> lang2
-            encoded = self.encoder(sent1, len1, lang_id=lang1_id)
+            encoded = self.encoder(sent1, len1, lang_id=lang1_id, noise=-vae_noise)
             scores = self.decoder(encoded, sent2[:-1], lang_id=lang2_id)
             assert scores.size() == (len2.max() - 1, bs, n_words2)
 
@@ -698,7 +704,7 @@ class TrainerMT(MultiprocessingEventLoop):
             bos = torch.cuda.FloatTensor(1, bs, n_words2).zero_()
             bos[0, :, params.bos_index[lang2_id]] = 1
             sent2_input = torch.cat([bos, F.softmax(scores / backprop_temperature, -1)], 0)
-            encoded = self.encoder(sent2_input, len2, lang_id=lang2_id)
+            encoded = self.encoder(sent2_input, len2, lang_id=lang2_id, noise=-vae_noise)
 
         # cross-entropy scores / loss
         scores = self.decoder(encoded, sent3[:-1], lang_id=lang3_id)

@@ -135,9 +135,13 @@ class TransformerEncoder(nn.Module):
             # print(x_out)
             x_std = torch.exp(0.5*x_logvar)
             if noise is None:
-                noise = torch.randn_like(x_std)
+                # noise = torch.randn_like(x_std)
+                noise = torch.randn(x_std.size()[1:])
             elif noise is 0:
-                noise = torch.zeros_like(x_std)
+                # noise = torch.zeros_like(x_std)
+                noise = torch.zeros(x_std.size()[1:])
+
+            noise = noise.type_as(x_std)
             x = noise.mul(x_std).add_(x_mean)
 
             return LatentState(
