@@ -25,6 +25,31 @@ from . import LatentState
 logger = getLogger()
 
 
+# def embedding_noise(src_emb, alpha=0.5):
+#     """ Embedding noise based on batch standard deviation """
+#     flattened_emb = src_emb.view(-1, src_emb.size(-1))
+#     stds = flattened_emb.std(dim=0).to(src_emb.device)
+#     # mags = (torch.rand(stds.size())*2 - 1).to(src_emb.device)
+#     mags = torch.randn(stds.size()).to(src_emb.device)
+#     noise = (stds * mags * alpha)
+#     return src_emb + noise
+
+def embedding_noise(emb, emb_mask, alpha=0.5):
+    """ Embedding noise based on batch standard deviation """
+    real_word_embs = emb[1-emb_mask.t()]
+    stds = real_word_embs.std(dim=0).to(emb.device)
+
+
+    # flattened_emb = emb.view(-1, emb.size(-1))
+    # stds = flattened_emb.std(dim=0).to(emb.device)
+    # mags = (torch.rand(stds.size())*2 - 1).to(emb.device)
+    mags = torch.randn(real_word_embs.size()).to(emb.device)
+    noise = (stds * mags * alpha)
+    emb[1-emb_mask.t()] += noise
+    return emb
+
+
+
 class TransformerEncoder(nn.Module):
     """Transformer encoder."""
 
@@ -33,6 +58,8 @@ class TransformerEncoder(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.dropout = args.dropout
+
+        self.embed_noise_alpha = args.embed_noise_alpha
 
         self.n_langs = args.n_langs
         self.n_words = args.n_words
@@ -84,14 +111,19 @@ class TransformerEncoder(nn.Module):
 
         embed_tokens = self.embeddings[lang_id]
 
-        # embed tokens and positions
+        # compute padding mask
+        encoder_padding_mask = src_tokens.t().eq(self.padding_idx)
+        # embed tokens
         x = self.embed_scale * embed_tokens(src_tokens)
         x = x.detach() if self.freeze_enc_emb else x
+
+        # add embedding noise
+        x = embedding_noise(x, encoder_padding_mask, self.embed_noise_alpha)
+
+        # embed positions
         x += self.embed_positions(src_tokens)
         x = F.dropout(x, p=self.dropout, training=self.training)
 
-        # compute padding mask
-        encoder_padding_mask = src_tokens.t().eq(self.padding_idx)
 
         # encoder layers
         for layer in self.layers:
