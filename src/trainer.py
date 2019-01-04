@@ -618,13 +618,15 @@ class TrainerMT(MultiprocessingEventLoop):
                 if self.params.lambda_xe_otfd > 0:
                     (sent1, len1), (sent3, len3) = self.get_batch('otf', lang1, lang3)
 
-            batches.append({
-                'direction': direction,
-                'sent1': sent1,
-                'sent3': sent3,
-                'len1': len1,
-                'len3': len3,
-            })
+
+            for i in range(self.params.batch_duplicates):
+                batches.append({
+                    'direction': direction,
+                    'sent1': sent1,
+                    'sent3': sent3,
+                    'len1': len1,
+                    'len3': len3,
+                })
 
         return batches
 
