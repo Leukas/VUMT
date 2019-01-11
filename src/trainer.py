@@ -684,7 +684,10 @@ class TrainerMT(MultiprocessingEventLoop):
         lang1, sent1, len1 = batch['lang1'], batch['sent1'], batch['len1']
         lang2, sent2, len2 = batch['lang2'], batch['sent2'], batch['len2']
         lang3, sent3, len3 = batch['lang3'], batch['sent3'], batch['len3']
-        vae_noise = batch['vae_noise']
+        if params.variational:
+            vae_noise = batch['vae_noise']
+        else:
+            vae_noise = 0
         if lambda_xe == 0:
             logger.warning("Unused generated CPU batch for direction %s-%s-%s!" % (lang1, lang2, lang3))
             return
