@@ -236,7 +236,7 @@ parser.add_argument("--lambda_vae", type=str, default="1",
 parser.add_argument("--batch_duplicates", type=int, default=2,
                     help="How many times to duplicate OTF generation (for VAE)")
 
-parser.add_argument("--embed_noise_alpha", type=float, default=0.5,
+parser.add_argument("--embed_noise_alpha", type=float, default=1e-4,
                     help="Alpha for embeddng noise")
 
 params = parser.parse_args()

@@ -660,12 +660,19 @@ class TrainerMT(MultiprocessingEventLoop):
 
                 # keep cached batches on CPU for easier transfer
                 assert not any(x.is_cuda for x in [sent1, sent2, sent3])
-                results.append(dict([
-                    ('lang1', lang1), ('sent1', sent1), ('len1', len1),
-                    ('lang2', lang2), ('sent2', sent2), ('len2', len2),
-                    ('lang3', lang3), ('sent3', sent3), ('len3', len3),
-                    ('vae_noise', encoded.vae_vars['noise']),
-                ]))
+                if self.params.variational:
+                    results.append(dict([
+                        ('lang1', lang1), ('sent1', sent1), ('len1', len1),
+                        ('lang2', lang2), ('sent2', sent2), ('len2', len2),
+                        ('lang3', lang3), ('sent3', sent3), ('len3', len3),
+                        ('vae_noise', encoded.vae_vars['noise']),
+                    ]))
+                else:
+                    results.append(dict([
+                        ('lang1', lang1), ('sent1', sent1), ('len1', len1),
+                        ('lang2', lang2), ('sent2', sent2), ('len2', len2),
+                        ('lang3', lang3), ('sent3', sent3), ('len3', len3),
+                    ]))
 
         return (rank, results)
 

@@ -167,7 +167,7 @@ class TransformerEncoder(nn.Module):
                 'encoder_padding_mask': encoder_padding_mask,  # B x T
             },
             dis_input=x,
-            vae_vars=None
+            vae_vars={}
         )
 
     def max_positions(self):
