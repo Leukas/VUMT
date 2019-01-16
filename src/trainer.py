@@ -575,10 +575,13 @@ class TrainerMT(MultiprocessingEventLoop):
         logger.info("Populating initial OTF generation cache ...")
         if init_cache_size is None:
             init_cache_size = self.num_replicas
+        
+        batches_needed = np.ceil(init_cache_size / self.params.batch_duplicates).astype(int)
+        batches = [self.get_worker_batches() for i in range(batches_needed)]
         cache = [
             self.call_async(rank=i % self.num_replicas, action='_async_otf_bt_gen',
                             result_type='otf_gen', fetch_all=True,
-                            batches=self.get_worker_batches())
+                            batches=batches[i % self.params.batch_duplicates])#self.get_worker_batches())
             for i in range(init_cache_size)
         ]
         while True:
@@ -619,14 +622,14 @@ class TrainerMT(MultiprocessingEventLoop):
                     (sent1, len1), (sent3, len3) = self.get_batch('otf', lang1, lang3)
 
 
-            for i in range(self.params.batch_duplicates):
-                batches.append({
-                    'direction': direction,
-                    'sent1': sent1,
-                    'sent3': sent3,
-                    'len1': len1,
-                    'len3': len3,
-                })
+            # for i in range(self.params.batch_duplicates):
+            batches.append({
+                'direction': direction,
+                'sent1': sent1,
+                'sent3': sent3,
+                'len1': len1,
+                'len3': len3,
+            })
 
         return batches
 
