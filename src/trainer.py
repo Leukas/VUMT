@@ -581,7 +581,7 @@ class TrainerMT(MultiprocessingEventLoop):
         cache = [
             self.call_async(rank=i % self.num_replicas, action='_async_otf_bt_gen',
                             result_type='otf_gen', fetch_all=True,
-                            batches=batches[i % self.params.batch_duplicates])#self.get_worker_batches())
+                            batches=batches[i % batches_needed])#self.get_worker_batches())
             for i in range(init_cache_size)
         ]
         while True:
