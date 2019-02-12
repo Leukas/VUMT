@@ -247,6 +247,22 @@ class EvaluatorMT(object):
         scores['ppl_%s_%s_%s_%s' % (lang1, lang2, lang3, data_type)] = np.exp(xe_loss / count)
         scores['bleu_%s_%s_%s_%s' % (lang1, lang2, lang3, data_type)] = bleu
 
+    def run_vae_evals(self, epoch):
+        """
+        Run all evaluations.
+        """
+        scores = OrderedDict({'epoch': epoch})
+
+        with torch.no_grad():
+
+            for lang1, lang2 in self.data['para'].keys():
+                self.translate_vae(lang1, lang2, 'test', scores)
+                self.translate_vae(lang2, lang1, 'test', scores)                
+                self.paraphrase_vae(lang1, lang2, 'test', scores)
+                self.paraphrase_vae(lang2, lang1, 'test', scores)   
+        return scores
+
+
     def run_all_evals(self, epoch):
         """
         Run all evaluations.
@@ -266,6 +282,85 @@ class EvaluatorMT(object):
 
         return scores
 
+    def translate_vae(self, lang1, lang2, data_type, scores):
+        self.encoder.eval()
+        self.decoder.eval()
+        params = self.params
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2]
+    
+        # hypothesis
+        for i in range(10):
+            txt = []
+            logger.info("i = %d" % i)
+            for j, batch in enumerate(self.get_iterator(data_type, lang1, lang2)):
+            
+                # batch
+                (sent1, len1), (sent2, len2) = batch
+                sent1, sent2 = sent1.cuda(), sent2.cuda()
+
+                # encode / decode / generate
+                # if i == 0: # first eval always the "most likely output"
+                #     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
+                # else:
+                encoded = self.encoder(sent1, len1, lang1_id, noise=5.0*i)
+                sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
+
+                txt.extend(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params))
+
+                if j == 10:
+                    break
+            # break
+        
+            hyp_name = 'vae--{4}--{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_type, i)
+            hyp_path = os.path.join(params.dump_path, hyp_name)
+            ref_path = params.ref_paths[(lang1, lang2, data_type)]
+            
+            with open(hyp_path, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(txt) + '\n')
+            restore_segmentation(hyp_path)
+        
+        # restore_cmd = "sed -i -r 's/(@@ )|(@@ ?$)//g' %s"
+        # os.system(restore_cmd % hyp_path)
+    
+    def paraphrase_vae(self, lang1, lang2, data_type, scores):
+        self.encoder.eval()
+        self.decoder.eval()
+        params = self.params
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2]
+    
+        # hypothesis
+        for i in range(10):
+            txt = []
+            logger.info("i = %d" % i)
+            for j, batch in enumerate(self.get_iterator(data_type, lang1, lang2)):
+            
+                # batch
+                (sent1, len1), (sent2, len2) = batch
+                sent1, sent2 = sent1.cuda(), sent2.cuda()
+
+                # encode / decode / generate
+                # if i == 0: # first eval always the "most likely output"
+                #     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
+                # else:
+                encoded = self.encoder(sent1, len1, lang1_id, noise=5.0*i)
+                sent2_, len2_, _ = self.decoder.generate(encoded, lang1_id)
+
+                txt.extend(convert_to_text(sent2_, len2_, self.dico[lang1], lang1_id, self.params))
+
+                if j == 10:
+                    break
+            # break
+        
+            hyp_name = 'pvae--{4}--{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_type, i)
+            hyp_path = os.path.join(params.dump_path, hyp_name)
+            ref_path = params.ref_paths[(lang1, lang2, data_type)]
+            
+            with open(hyp_path, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(txt) + '\n')
+            restore_segmentation(hyp_path)
+        
 
 def eval_moses_bleu(ref, hyp):
     """

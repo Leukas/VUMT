@@ -229,6 +229,8 @@ parser.add_argument("--length_penalty", type=float, default=1.0,
                     help="Length penalty: <1.0 favors shorter, >1.0 favors longer sentences")
 
 # VAE params
+parser.add_argument("--eval_vae", type=bool_flag, default=False,
+                    help="Evaluate variational model. Default False")
 parser.add_argument("--variational", type=bool_flag, default=False,
                     help="Use variational model. Default False")
 parser.add_argument("--lambda_vae", type=str, default="1",
@@ -236,9 +238,11 @@ parser.add_argument("--lambda_vae", type=str, default="1",
 parser.add_argument("--batch_duplicates", type=int, default=2,
                     help="How many times to duplicate OTF generation (for VAE)")
 
+# Extra noise params
 parser.add_argument("--embed_noise_alpha", type=float, default=1e-4,
                     help="Alpha for embeddng noise")
-
+parser.add_argument("--word_duplicate", type=float, default=0,
+                    help="Randomly duplicate input words (0 to disable)")
 params = parser.parse_args()
 
 
@@ -264,6 +268,11 @@ if __name__ == '__main__':
     if params.eval_only:
         evaluator.run_all_evals(0)
         exit()
+
+    if params.eval_vae:
+        evaluator.run_vae_evals(0)
+        exit()
+
 
     # language model pretraining
     if params.lm_before > 0:

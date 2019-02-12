@@ -2,6 +2,11 @@
 .vscode/
 data/
 dumped/
+tools/
+*.xlsx
+*.xls
+*.pdf
+*Poster*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -259,6 +259,67 @@ class TrainerMT(MultiprocessingEventLoop):
             x2[:l2[i], i].copy_(torch.LongTensor(sentences[i]))
         return x2, l2
 
+    def word_duplicate(self, x, l, lang_id):
+        """
+        Randomly duplicate input words.
+        """
+        if self.params.word_duplicate == 0:
+            return x, l
+        assert 0 < self.params.word_duplicate < 1
+
+        # define words to keep
+        # 'keep' keeps the word as is, otherwise duplicate the word
+        bos_index = self.params.bos_index[lang_id]
+        assert (x[0] == bos_index).sum() == l.size(0)
+        keep = np.random.rand(x.size(0) - 1, x.size(1)) >= self.params.word_duplicate
+        keep[0] = 1  # do not duplicate the start sentence symbol
+
+        # be sure to duplicate entire words
+        bpe_end = self.bpe_end[lang_id][x]
+        word_idx = bpe_end[::-1].cumsum(0)[::-1]
+        word_idx = word_idx.max(0)[None, :] - word_idx
+
+        sentences = []
+        lengths = []
+        for i in range(l.size(0)):
+            assert x[l[i] - 1, i] == self.params.eos_index
+            words = x[:l[i] - 1, i].tolist()
+
+            to_insert = []
+            current_word_group = 0
+            insert_idx = 0
+            for j in range(len(words)):
+                # need to duplicate words while retaining BPE token order, so 
+                # 'abc' -> 'abcabc', NOT 'aabbcc' 
+                if word_idx[j, i] > current_word_group:
+                    current_word_group += 1
+                    insert_idx = j 
+                if not keep[word_idx[j, i], i]: 
+                    to_insert.append((insert_idx, words[j])) 
+
+            to_insert = to_insert[::-1]
+            for ins_idx, ins_word in to_insert:
+                words.insert(ins_idx, ins_word)
+
+
+            new_s = words
+            # new_s = [w for j, w in enumerate(words) if keep[word_idx[j, i], i]]
+            # we need to have at least one word in the sentence (more than the start / end sentence symbols)
+            # if len(new_s) == 1:
+            #     new_s.append(words[np.random.randint(1, len(words))])
+            new_s.append(self.params.eos_index)
+            assert len(new_s) >= 3 and new_s[0] == bos_index and new_s[-1] == self.params.eos_index
+            sentences.append(new_s)
+            lengths.append(len(new_s))
+        # re-construct input
+        l2 = torch.LongTensor(lengths)
+        x2 = torch.LongTensor(l2.max(), l2.size(0)).fill_(self.params.pad_index)
+        for i in range(l2.size(0)):
+            x2[:l2[i], i].copy_(torch.LongTensor(sentences[i]))
+        return x2, l2
+
+
+
     def word_blank(self, x, l, lang_id):
         """
         Randomly blank input words.
@@ -299,6 +360,7 @@ class TrainerMT(MultiprocessingEventLoop):
         """
         words, lengths = self.word_shuffle(words, lengths, lang_id)
         words, lengths = self.word_dropout(words, lengths, lang_id)
+        words, lengths = self.word_duplicate(words, lengths, lang_id)
         words, lengths = self.word_blank(words, lengths, lang_id)
         return words, lengths
 
