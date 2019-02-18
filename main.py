@@ -237,6 +237,8 @@ parser.add_argument("--lambda_vae", type=str, default="1",
                     help="Variational loss coefficient")
 parser.add_argument("--batch_duplicates", type=int, default=2,
                     help="How many times to duplicate OTF generation (for VAE)")
+parser.add_argument("--sample_dist", type=float, default=1.0,
+                    help="Distance multiplier for VAE sampling.")                  
 
 # Extra noise params
 parser.add_argument("--embed_noise_alpha", type=float, default=1e-4,

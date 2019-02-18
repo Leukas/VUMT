@@ -60,6 +60,7 @@ class TransformerEncoder(nn.Module):
         self.dropout = args.dropout
 
         self.embed_noise_alpha = args.embed_noise_alpha
+        self.sample_dist = args.sample_dist
 
         self.n_langs = args.n_langs
         self.n_words = args.n_words
@@ -137,9 +138,15 @@ class TransformerEncoder(nn.Module):
             if noise is None:
                 # noise = torch.randn_like(x_std)
                 noise = torch.randn(x_std.size()[1:])
+                noise *= self.sample_dist
             elif noise is 0:
                 # noise = torch.zeros_like(x_std)
                 noise = torch.zeros(x_std.size()[1:])
+            elif isinstance(noise, float):
+                noise_mag = noise
+                noise = torch.randn(x_std.size()[1:])
+                cur_mag = torch.norm(noise, dim=1)
+                noise = (noise.t() * (noise_mag / cur_mag)).t()
 
             noise = noise.type_as(x_std)
             x = noise.mul(x_std).add_(x_mean)
