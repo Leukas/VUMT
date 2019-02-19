@@ -25,24 +25,10 @@ from . import LatentState
 logger = getLogger()
 
 
-# def embedding_noise(src_emb, alpha=0.5):
-#     """ Embedding noise based on batch standard deviation """
-#     flattened_emb = src_emb.view(-1, src_emb.size(-1))
-#     stds = flattened_emb.std(dim=0).to(src_emb.device)
-#     # mags = (torch.rand(stds.size())*2 - 1).to(src_emb.device)
-#     mags = torch.randn(stds.size()).to(src_emb.device)
-#     noise = (stds * mags * alpha)
-#     return src_emb + noise
-
 def embedding_noise(emb, emb_mask, alpha=0.5):
     """ Embedding noise based on batch standard deviation """
     real_word_embs = emb[1-emb_mask.t()]
     stds = real_word_embs.std(dim=0).to(emb.device)
-
-
-    # flattened_emb = emb.view(-1, emb.size(-1))
-    # stds = flattened_emb.std(dim=0).to(emb.device)
-    # mags = (torch.rand(stds.size())*2 - 1).to(emb.device)
     mags = torch.randn(real_word_embs.size()).to(emb.device)
     noise = (stds * mags * alpha)
     emb[1-emb_mask.t()] += noise

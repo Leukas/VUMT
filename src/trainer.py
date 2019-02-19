@@ -23,10 +23,12 @@ from .test import test_sharing
 logger = getLogger()
 
 def VAELoss(mean, logvar, norm):
+    """
+    Variational loss
+    """
     x = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
-    norm =  torch.prod(torch.Tensor(list(logvar.size()))).type_as(logvar)#norm
-    # z = y
-    return x / norm #-0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp()) / norm
+    norm =  torch.prod(torch.Tensor(list(logvar.size()))).type_as(logvar)
+    return x / norm 
 
 class TrainerMT(MultiprocessingEventLoop):
 
@@ -638,7 +640,7 @@ class TrainerMT(MultiprocessingEventLoop):
         if init_cache_size is None:
             init_cache_size = self.num_replicas
         
-        batches_needed = np.ceil(init_cache_size / self.params.batch_duplicates).astype(int)
+        batches_needed = np.ceil(init_cache_size / self.params.vae_samples).astype(int)
         batches = [self.get_worker_batches() for i in range(batches_needed)]
         cache = [
             self.call_async(rank=i % self.num_replicas, action='_async_otf_bt_gen',
@@ -683,8 +685,6 @@ class TrainerMT(MultiprocessingEventLoop):
                 if self.params.lambda_xe_otfd > 0:
                     (sent1, len1), (sent3, len3) = self.get_batch('otf', lang1, lang3)
 
-
-            # for i in range(self.params.batch_duplicates):
             batches.append({
                 'direction': direction,
                 'sent1': sent1,

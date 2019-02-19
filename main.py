@@ -235,13 +235,13 @@ parser.add_argument("--variational", type=bool_flag, default=False,
                     help="Use variational model. Default False")
 parser.add_argument("--lambda_vae", type=str, default="1",
                     help="Variational loss coefficient")
-parser.add_argument("--batch_duplicates", type=int, default=2,
-                    help="How many times to duplicate OTF generation (for VAE)")
+parser.add_argument("--vae_samples", type=int, default=2,
+                    help="How many times to sample during OTF generation (for VAE)")
 parser.add_argument("--sample_dist", type=float, default=1.0,
                     help="Distance multiplier for VAE sampling.")                  
 
 # Extra noise params
-parser.add_argument("--embed_noise_alpha", type=float, default=1e-4,
+parser.add_argument("--embed_noise_alpha", type=float, default=0,
                     help="Alpha for embeddng noise")
 parser.add_argument("--word_duplicate", type=float, default=0,
                     help="Randomly duplicate input words (0 to disable)")
