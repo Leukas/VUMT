@@ -1,11 +1,13 @@
-# UNMT (Unsupervised Neural Machine Translation)
+# Variational Unsupervised Neural Machine Translation
 
-This is my ongoing master thesis project, and concerns neural machine translation using only monolingual corpora. 
+This is my ongoing master thesis project, and concerns neural machine translation using only monolingual corpora, a.k.a. Unsupervised NMT.
 
 ## Background
 The main idea of UNMT is to translate from one language to another without any data with sentence-to-sentence translations. In other words, the only data given is text from both languages.  
 This has been previously done with surprising success, most recently by [facebookresearch/UnsupervisedMT](https://github.com/facebookresearch/UnsupervisedMT), achieving BLEU scores of 24+ on EN-FR and FR-EN.
 This model builds on the work from UnsupervisedMT by adding variational encoding. This is added for the ability to generate multiple translations, and has the added benefit of being able to paraphrase.
+
+I presented a poster at [CLIN 29](https://www.let.rug.nl/clin29/), which can be seen in `PosterCLIN.pdf`. Since then, the BLEU results have been improved with word duplicate noise.
 
 
 ## How to run
@@ -26,4 +28,3 @@ Note: the "vae_samples" argument is typically best as a mulitple of the number o
 
 To evaluate the variational component, set "eval_vae" to True. This will evaluation without training, and currently samples at increasing distances from the mean, for both translation and paraphrasing. Currently, this only creates the output translation and paraphrasing files, but this will be updated soon to choose the best samples and evaluate BLEU automatically. 
 
-## 
