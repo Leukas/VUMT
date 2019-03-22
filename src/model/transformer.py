@@ -68,7 +68,7 @@ class TransformerEncoder(nn.Module):
             left_pad=args.left_pad_source,
         )
 
-        self.layers = nn.ModuleList()
+        self.layers = nn.ModuleList([None for i in range(args.encoder_layers)])
         for k in range(args.encoder_layers):
             # share top share_enc layers
             layer_is_shared = (k >= (args.encoder_layers - args.share_enc))
@@ -223,7 +223,7 @@ class TransformerDecoder(nn.Module):
             left_pad=args.left_pad_target,
         )
 
-        self.layers = nn.ModuleList()
+        self.layers = nn.ModuleList([None for i in range(args.encoder_layers)])
         for k in range(args.decoder_layers):
             # share bottom share_dec layers
             layer_is_shared = (k < args.share_dec)
