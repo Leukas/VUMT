@@ -7,6 +7,7 @@ tools/
 *.xls
 *.pdf
 *Poster*
+*.todo
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
