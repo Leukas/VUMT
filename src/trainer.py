@@ -845,7 +845,7 @@ class TrainerMT(MultiprocessingEventLoop):
                 mean_loss.append(('LME-%s' % lang, 'lme_costs_%s' % lang))
                 mean_loss.append(('LMD-%s' % lang, 'lmd_costs_%s' % lang))
                 mean_loss.append(('LMER-%s' % lang, 'lmer_costs_%s' % lang))
-                mean_loss.append(('ENC-L2-%s' % lang, 'enc_norms_%s' % lang))
+                # mean_loss.append(('ENC-L2-%s' % lang, 'enc_norms_%s' % lang))
 
             s_iter = "%7i - " % self.n_iter
             s_stat = ' || '.join(['{}: {:7.4f}'.format(k, np.mean(self.stats[l]))
