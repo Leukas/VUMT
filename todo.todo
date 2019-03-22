@@ -5,6 +5,7 @@ Todo:
     ✔ Make eval mode use 0 vae noise @done(19-01-03 15:45)
     ✔ Embedding noise @done(19-01-03 15:45)
     ✔ Duplicate word noise @done(19-02-13 00:54)
+    ☐ Replace "sed" calls with python string.replace() calls for running on Windows.
     ☐ Monolingual paraphrase training
         ☐ Evaluation method? Is there one?
     ☐ Multi-sample BLEU score
@@ -39,4 +40,33 @@ Reading:
     ☐ KL equation
     ✔ BEER score @done(19-01-04 22:22)
     ☐ VAE paper
-    ☐ New Artetxe paper
+    ✔ New Artetxe paper @done(19-03-07 01:07)
+    ☐ Paraphrase papers
+    
+
+
+Ideas:
+    For training word embeddings with limited monolingual data, train an English embedding first, use it for transfer learning. 
+        ~ Train EN word embedding (with 10 M sentences or whatever)
+        ~ Order embedding by frequency
+        ~ Get L2, order it by frequency
+        ~ Cut off EN embedding to vocab size of L2
+        ~ Use weights from EN embedding and continue training
+    
+
+
+Notes:  
+    ☐ Why does the model repeat words, especially more often when sampled from further out?
+        I think this is because when it samples from further out, it is adding the same noise to each word, so when the noise is large this will often push each word to become a single different word. Then, the attention mechanism sees a ton of the same word when trying to decode, so it ends up repeating a lot. 
+
+        So, the duplicating word noise trains the model to realize that duplicate words aren't very common in real sentences. 
+
+    ☐ What about the fact that variational models often learn to ignore the noise added? Is this a problem in this model as well?
+        This might be partially true, but since we get multiple different translations by sampling with different amounts of noise, it isn't COMPLETELY ignoring noise.
+
+        I think the fact that the decoding process is done word-by-word makes it much harder to ignore all the noise. Not entirely sure on this point. 
+
+    ☐ I dont think I am getting the "full effect" of variational models when the noise is the same for each word. For example if I add noise to the sentence "The sky is blue" such that blue would become red, that is effectively doing the operation -blue + red on each word, but that shouldn't happen for the other words in the sentence. So is there even a way to change the sentence to "the sky is red" with this method of adding noise?
+        I think this might be okay actually. So the - blue + red operation is adding some noise to a combination of 512 dimensions, and 2^512 is huge. So it's more likely than not that the other words won't change because of how sparse the embedding graph is. 
+
+        But then if it is so sparse, why does the model actually give varied outputs? By the same logic the noise should be so inconsequential that it would effectively never change a word during training.
