@@ -231,6 +231,10 @@ parser.add_argument("--length_penalty", type=float, default=1.0,
 # VAE params
 parser.add_argument("--eval_vae", type=bool_flag, default=False,
                     help="Evaluate variational model. Default False")
+parser.add_argument("--eval_samples", type=int, default=10,
+                    help="Number of times to sample each test sentence when evaluating.")
+
+
 parser.add_argument("--variational", type=bool_flag, default=False,
                     help="Use variational model. Default False")
 parser.add_argument("--lambda_vae", type=str, default="1",

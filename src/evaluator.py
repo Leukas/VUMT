@@ -283,14 +283,18 @@ class EvaluatorMT(object):
         return scores
 
     def translate_vae(self, lang1, lang2, data_type, scores):
+        """
+            Samples several times and 
+        """
         self.encoder.eval()
         self.decoder.eval()
         params = self.params
         lang1_id = params.lang2id[lang1]
         lang2_id = params.lang2id[lang2]
     
+        subprocess.Popen("mkdir -p %s" % os.path.join(params.dump_path, 'vae'), shell=True).wait()
         # hypothesis
-        for i in range(10):
+        for i in range(params.eval_samples):
             txt = []
             logger.info("i = %d" % i)
             for j, batch in enumerate(self.get_iterator(data_type, lang1, lang2)):
@@ -312,8 +316,8 @@ class EvaluatorMT(object):
                     break
             # break
         
-            hyp_name = 'vae--{4}--{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_type, i)
-            hyp_path = os.path.join(params.dump_path, hyp_name)
+            hyp_name = 'vae-sample{4}-epoch{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_type, i)
+            hyp_path = os.path.join(params.dump_path, 'vae', hyp_name)
             ref_path = params.ref_paths[(lang1, lang2, data_type)]
             
             with open(hyp_path, 'w', encoding='utf-8') as f:

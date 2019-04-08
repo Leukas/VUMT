@@ -680,6 +680,10 @@ class TrainerMT(MultiprocessingEventLoop):
                     sent1, len1 = self.get_batch('otf', lang1, None)
                     sent3, len3 = sent1, len1
             # 3-lang back-translation - parallel data
+            elif lang1 == lang2 == lang3:
+                if self.params.lambda_xe_otfd > 0:
+                    sent1, len1 = self.get_batch('otf', lang1, None)
+                    sent3, len3 = sent1, len1
             else:
                 assert lang1 != lang2 and lang2 != lang3 and lang1 != lang3
                 if self.params.lambda_xe_otfd > 0:
