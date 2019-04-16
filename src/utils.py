@@ -348,13 +348,19 @@ def reverse_sentences(batch, lengths):
     return new_batch
 
 
-def restore_segmentation(path):
+def restore_segmentation_file(path):
     """
     Take a file segmented with BPE and restore it to its original segmentation.
     """
     assert os.path.isfile(path)
     restore_cmd = "sed -i -r 's/(@@ )|(@@ ?$)//g' %s"
     subprocess.Popen(restore_cmd % path, shell=True).wait()
+
+def restore_segmentation(text):
+    """
+    Take a text segmented with BPE and restore it to its original segmentation.
+    """
+    return re.sub("(@@ )|(@@ ?$)","", text)
 
 
 def create_word_masks(params, data):

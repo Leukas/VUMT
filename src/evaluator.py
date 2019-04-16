@@ -108,15 +108,17 @@ class EvaluatorMT(object):
                 lang1_txt = [x.replace('<unk>', '<<unk>>') for x in lang1_txt]
                 lang2_txt = [x.replace('<unk>', '<<unk>>') for x in lang2_txt]
 
+                # restore original segmentation
+
                 # export hypothesis
                 with open(lang1_path, 'w', encoding='utf-8') as f:
-                    f.write('\n'.join(lang1_txt) + '\n')
+                    lang1_txt = '\n'.join(lang1_txt) + '\n'
+                    lang1_txt = restore_segmentation(lang1_txt)
+                    f.write(lang1_txt)
                 with open(lang2_path, 'w', encoding='utf-8') as f:
-                    f.write('\n'.join(lang2_txt) + '\n')
-
-                # restore original segmentation
-                restore_segmentation(lang1_path)
-                restore_segmentation(lang2_path)
+                    lang2_txt = '\n'.join(lang2_txt) + '\n'
+                    lang2_txt = restore_segmentation(lang2_txt)
+                    f.write(lang2_txt)
 
                 # store data paths
                 params.ref_paths[(lang2, lang1, data_type)] = lang1_path
@@ -166,10 +168,12 @@ class EvaluatorMT(object):
         hyp_path = os.path.join(params.dump_path, hyp_name)
         ref_path = params.ref_paths[(lang1, lang2, data_type)]
 
+        
         # export sentences to hypothesis file / restore BPE segmentation
         with open(hyp_path, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(txt) + '\n')
-        restore_segmentation(hyp_path)
+            txt = '\n'.join(txt) + '\n'
+            txt = restore_segmentation(txt)            
+            f.write(txt)
 
         # evaluate BLEU score
         bleu = eval_moses_bleu(ref_path, hyp_path)
@@ -236,8 +240,9 @@ class EvaluatorMT(object):
 
         # export sentences to hypothesis file / restore BPE segmentation
         with open(hyp_path, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(txt) + '\n')
-        restore_segmentation(hyp_path)
+            txt = '\n'.join(txt) + '\n'
+            txt = restore_segmentation(txt)            
+            f.write(txt)
 
         # evaluate BLEU score
         bleu = eval_moses_bleu(ref_path, hyp_path)
@@ -321,9 +326,10 @@ class EvaluatorMT(object):
             ref_path = params.ref_paths[(lang1, lang2, data_type)]
             
             with open(hyp_path, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(txt) + '\n')
-            restore_segmentation(hyp_path)
-        
+                txt = '\n'.join(txt) + '\n'
+                txt = restore_segmentation(txt)            
+                f.write(txt)
+            
         # restore_cmd = "sed -i -r 's/(@@ )|(@@ ?$)//g' %s"
         # os.system(restore_cmd % hyp_path)
     
@@ -362,8 +368,9 @@ class EvaluatorMT(object):
             ref_path = params.ref_paths[(lang1, lang2, data_type)]
             
             with open(hyp_path, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(txt) + '\n')
-            restore_segmentation(hyp_path)
+                txt = '\n'.join(txt) + '\n'
+                txt = restore_segmentation(txt)            
+                f.write(txt)
         
 
 def eval_moses_bleu(ref, hyp):
