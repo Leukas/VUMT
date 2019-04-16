@@ -355,6 +355,9 @@ if __name__ == '__main__':
                     # 2-lang back-translation - parallel data
                     elif lang1 == lang3 != lang2:
                         trainer.otf_bt(batch, params.lambda_xe_otfd, params.otf_backprop_temperature)
+                    # 1-lang back-translation
+                    elif lang1 == lang2 == lang3:
+                        trainer.otf_bt(batch, params.lambda_xe_otfd, params.otf_backprop_temperature)
                     # 3-lang back-translation - parallel data
                     elif lang1 != lang2 and lang2 != lang3 and lang1 != lang3:
                         trainer.otf_bt(batch, params.lambda_xe_otfd, params.otf_backprop_temperature)
