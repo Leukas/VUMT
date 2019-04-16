@@ -121,14 +121,14 @@ class TransformerEncoder(nn.Module):
             x_mean, x_logvar = torch.split(x, int(x.size(2)/2), dim=2)
             # print(x_out)
             x_std = torch.exp(0.5*x_logvar)
-            if noise is None:
+            if noise is None: # random noise
                 # noise = torch.randn_like(x_std)
                 noise = torch.randn(x_std.size()[1:])
                 noise *= self.sample_dist
-            elif noise is 0:
+            elif noise is 0: # no noise (i.e. magnitude 0)
                 # noise = torch.zeros_like(x_std)
                 noise = torch.zeros(x_std.size()[1:])
-            elif isinstance(noise, float):
+            elif isinstance(noise, float): # noise with specified magnitude
                 noise_mag = noise
                 noise = torch.randn(x_std.size()[1:])
                 cur_mag = torch.norm(noise, dim=1)
@@ -147,6 +147,7 @@ class TransformerEncoder(nn.Module):
                 vae_vars={
                     'mean': x_mean,
                     'logvar': x_logvar,
+                    'std': x_std,
                     'noise': noise
                 }
             )#, x_mean, x_logvar, noise
@@ -162,6 +163,89 @@ class TransformerEncoder(nn.Module):
             dis_input=x,
             vae_vars={}
         )
+
+    def forward_encode(self, src_tokens, src_lengths, lang_id):
+        """ Forward pass without sampling (for VAE otf generation)"""
+        assert type(lang_id) is int
+
+        embed_tokens = self.embeddings[lang_id]
+
+        # compute padding mask
+        encoder_padding_mask = src_tokens.t().eq(self.padding_idx)
+        # embed tokens
+        x = self.embed_scale * embed_tokens(src_tokens)
+        x = x.detach() if self.freeze_enc_emb else x
+
+        # add embedding noise
+        x = embedding_noise(x, encoder_padding_mask, self.embed_noise_alpha)
+
+        # embed positions
+        x += self.embed_positions(src_tokens)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+
+        # encoder layers
+        for layer in self.layers:
+            x = layer[lang_id](x, encoder_padding_mask)
+
+        x = self.var_ff(x)
+        x_mean, x_logvar = torch.split(x, int(x.size(2)/2), dim=2)
+        # print(x_out)
+        x_std = torch.exp(0.5*x_logvar)
+
+        return LatentState(
+            input_len=src_lengths,
+            dec_input={
+                'encoder_out': x,  # T x B x C
+                'encoder_padding_mask': encoder_padding_mask,  # B x T
+            },
+            dis_input=x,
+            vae_vars={
+                'mean': x_mean,
+                'logvar': x_logvar,
+                'std': x_std,
+                'noise': None
+            }
+        )
+
+
+    def forward_sample(self, latent_state, noise=None):
+        """ Forward sampling (for VAE otf generation)"""
+
+        x_std = latent_state.vae_vars['std']
+        x_logvar = latent_state.vae_vars['logvar']
+        x_mean = latent_state.vae_vars['mean']
+
+        if noise is None: # random noise
+            noise = torch.randn(x_std.size()[1:])
+            noise *= self.sample_dist
+        elif noise is 0: # no noise (i.e. magnitude 0)
+            noise = torch.zeros(x_std.size()[1:])
+        elif isinstance(noise, float): # noise with specified magnitude
+            noise_mag = noise
+            noise = torch.randn(x_std.size()[1:])
+            cur_mag = torch.norm(noise, dim=1)
+            noise = (noise.t() * (noise_mag / cur_mag)).t()
+
+        noise = noise.type_as(x_std)
+        x = noise.mul(x_std).add_(x_mean)
+
+        return LatentState(
+            input_len=latent_state.input_len,
+            dec_input={
+                'encoder_out': x,  # T x B x C
+                'encoder_padding_mask': latent_state.dec_input['encoder_padding_mask'],  # B x T
+            },
+            dis_input=x,
+            vae_vars={
+                'mean': x_mean,
+                'logvar': x_logvar,
+                'std': x_std,
+                'noise': noise
+            }
+        )
+
+
 
     def max_positions(self):
         """Maximum input length supported by the encoder."""
