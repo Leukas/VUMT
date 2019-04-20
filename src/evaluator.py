@@ -322,7 +322,7 @@ class EvaluatorMT(object):
         logger.info("AVG_COS_SIM : %f" % (avg_cos_sim))
 
         # update scores
-        scores['avgcossim_%s_%s' % (lang, data_type)] = avg_cos_sim
+        scores['avgcossim_%s_%s' % (lang, data_type)] = avg_cos_sim.item()
 
 
 
