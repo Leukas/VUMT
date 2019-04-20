@@ -249,6 +249,11 @@ parser.add_argument("--embed_noise_alpha", type=float, default=0,
                     help="Alpha for embeddng noise")
 parser.add_argument("--word_duplicate", type=float, default=0,
                     help="Randomly duplicate input words (0 to disable)")
+
+# Paraphrase params
+parser.add_argument("--paraphrase_dataset", type=str, default="",
+                    help="Paraphrase dataset (lang1:test11)")
+
 params = parser.parse_args()
 
 

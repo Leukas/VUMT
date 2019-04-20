@@ -78,6 +78,17 @@ class EvaluatorMT(object):
             for batch in dataset.get_iterator(shuffle=False, group_by_size=True)():
                 yield batch if lang1 < lang2 else batch[::-1]
 
+    def get_paraphrase_iterator(self, data_type, lang):
+        """
+        Create a new iterator for a dataset.
+        """
+        assert data_type in ['valid', 'test']
+
+        dataset = self.data['paraphrase'][lang][data_type]
+        dataset.batch_size = 32
+        for batch in dataset.get_iterator(shuffle=False, group_by_size=True)():
+            yield batch
+
     def create_reference_files(self):
         """
         Create reference files for BLEU evaluation.
@@ -252,6 +263,69 @@ class EvaluatorMT(object):
         scores['ppl_%s_%s_%s_%s' % (lang1, lang2, lang3, data_type)] = np.exp(xe_loss / count)
         scores['bleu_%s_%s_%s_%s' % (lang1, lang2, lang3, data_type)] = bleu
 
+    def eval_paraphrase(self, lang, data_type, scores):
+        """
+        Evaluate lang - lang paraphrases
+        1. Cosine similarity
+        2. BLEU/PINC 
+        3. METEOR/PINC
+        4. SES/PINC
+        """
+        logger.info("Evaluating %s paraphrase (%s) ..." % (lang, data_type))
+        assert data_type in ['valid', 'test']
+        self.encoder.eval()
+        self.decoder.eval()
+        params = self.params
+        lang_id = params.lang2id[lang]
+
+        # hypothesis
+        txt = []
+
+        all_sim = 0 
+        n_sents = 0
+        for batch in self.get_paraphrase_iterator(data_type, lang):
+
+            # batch
+            (sent1, len1), (sent2, len2) = batch
+            sent1, sent2 = sent1.cuda(), sent2.cuda()
+
+            # encode / decode / generate
+            encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
+            encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
+
+            sim = cosine_sim(encoded1.dis_input, encoded2.dis_input)
+            n_sents += sim.size(0)
+            all_sim += sim.sum(dim=0)
+
+            # decoded = self.decoder(encoded, sent2[:-1], lang2_id)
+            # sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
+
+            # convert to text
+            # txt.extend(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params))
+
+        # hypothesis / reference paths
+        # hyp_name = 'hyp{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_type)
+        # hyp_path = os.path.join(params.dump_path, hyp_name)
+        # ref_path = params.ref_paths[(lang1, lang2, data_type)]
+
+        
+        # export sentences to hypothesis file / restore BPE segmentation
+        # with open(hyp_path, 'w', encoding='utf-8') as f:
+        #     txt = '\n'.join(txt) + '\n'
+        #     txt = restore_segmentation(txt)            
+        #     f.write(txt)
+
+        # evaluate BLEU score
+        # bleu = eval_moses_bleu(ref_path, hyp_path)
+        # logger.info("BLEU %s %s : %f" % (hyp_path, ref_path, bleu))
+        avg_cos_sim = all_sim/n_sents
+        logger.info("AVG_COS_SIM : %f" % (avg_cos_sim))
+
+        # update scores
+        scores['avgcossim_%s_%s' % (lang, data_type)] = avg_cos_sim
+
+
+
     def run_vae_evals(self, epoch):
         """
         Run all evaluations.
@@ -276,6 +350,9 @@ class EvaluatorMT(object):
 
         with torch.no_grad():
 
+            for lang in self.data['paraphrase'].keys():
+                self.eval_paraphrase(lang, 'test', scores)
+
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
                     self.eval_para(lang1, lang2, data_type, scores)
@@ -284,6 +361,7 @@ class EvaluatorMT(object):
             for lang1, lang2, lang3 in self.params.pivo_directions:
                 for data_type in ['valid', 'test']:
                     self.eval_back(lang1, lang2, lang3, data_type, scores)
+
 
         return scores
 
@@ -388,6 +466,15 @@ def eval_moses_bleu(ref, hyp):
         logger.warning('Impossible to parse BLEU score! "%s"' % result)
         return -1
 
+
+def cosine_sim(enc1, enc2):
+    """
+    Compute cosine similarity between two encodings. Using method from Cer et al. 2018
+    """
+    assert enc1.size()[1:] == enc2.size()[1:]
+    vec1 = enc1.sum(dim=0) / np.sqrt(enc1.size(0))
+    vec2 = enc2.sum(dim=0) / np.sqrt(enc2.size(0))
+    return torch.nn.functional.cosine_similarity(vec1, vec2, dim=-1)
 
 def convert_to_text(batch, lengths, dico, lang_id, params):
     """
