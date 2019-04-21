@@ -640,8 +640,8 @@ class TrainerMT(MultiprocessingEventLoop):
         if init_cache_size is None:
             init_cache_size = self.num_replicas
         
-        # batches_needed = np.ceil(init_cache_size / self.params.vae_samples).astype(int)
-        batches_needed = init_cache_size
+        batches_needed = np.ceil(init_cache_size / self.params.vae_samples).astype(int)
+        # batches_needed = init_cache_size
         batches = [self.get_worker_batches() for i in range(batches_needed)]
         cache = [
             self.call_async(rank=i % self.num_replicas, action='_async_otf_bt_gen',
@@ -719,38 +719,38 @@ class TrainerMT(MultiprocessingEventLoop):
                 sent3, len3 = batch['sent3'], batch['len3']
 
                 # lang1 -> lang2
-                if not params.variational:
-                    encoded = self.encoder(sent1, len1, lang_id=lang1_id)
-                    params.vae_samples = 1 # this should be the case anyway but might as well
-                else:
-                    latent_state = self.encoder.forward_encode(sent1, len1, lang_id=lang1_id)
+                # if not params.variational:
+                encoded = self.encoder(sent1, len1, lang_id=lang1_id)
+                    # params.vae_samples = 1 # this should be the case anyway but might as well
+                # else:
+                    # latent_state = self.encoder(sent1, len1, lang_id=lang1_id)
                     # print('latent_state done')
-                for i in range(params.vae_samples):
-                    if params.variational:
-                        encoded = self.encoder.forward_sample(latent_state)
-                        # print('sample done')
-                    max_len = int(1.5 * len1.max() + 10)
-                    if params.otf_sample == -1:
-                        sent2, len2, _ = self.decoder.generate(encoded, lang_id=lang2_id, max_len=max_len)
-                    else:
-                        sent2, len2, _ = self.decoder.generate(encoded, lang_id=lang2_id, max_len=max_len,
-                                                            sample=True, temperature=params.otf_sample)
+                # for i in range(params.vae_samples):
+                # if params.variational:
+                #     encoded = self.encoder.forward_sample(latent_state)
+                #     # print('sample done')
+                max_len = int(1.5 * len1.max() + 10)
+                if params.otf_sample == -1:
+                    sent2, len2, _ = self.decoder.generate(encoded, lang_id=lang2_id, max_len=max_len)
+                else:
+                    sent2, len2, _ = self.decoder.generate(encoded, lang_id=lang2_id, max_len=max_len,
+                                                        sample=True, temperature=params.otf_sample)
 
-                    # keep cached batches on CPU for easier transfer
-                    assert not any(x.is_cuda for x in [sent1, sent2, sent3])
-                    if self.params.variational:
-                        results.append(dict([
-                            ('lang1', lang1), ('sent1', sent1), ('len1', len1),
-                            ('lang2', lang2), ('sent2', sent2), ('len2', len2),
-                            ('lang3', lang3), ('sent3', sent3), ('len3', len3),
-                            ('vae_noise', encoded.vae_vars['noise']),
-                        ]))
-                    else:
-                        results.append(dict([
-                            ('lang1', lang1), ('sent1', sent1), ('len1', len1),
-                            ('lang2', lang2), ('sent2', sent2), ('len2', len2),
-                            ('lang3', lang3), ('sent3', sent3), ('len3', len3),
-                        ]))
+                # keep cached batches on CPU for easier transfer
+                assert not any(x.is_cuda for x in [sent1, sent2, sent3])
+                if self.params.variational:
+                    results.append(dict([
+                        ('lang1', lang1), ('sent1', sent1), ('len1', len1),
+                        ('lang2', lang2), ('sent2', sent2), ('len2', len2),
+                        ('lang3', lang3), ('sent3', sent3), ('len3', len3),
+                        ('vae_noise', encoded.vae_vars['noise']),
+                    ]))
+                else:
+                    results.append(dict([
+                        ('lang1', lang1), ('sent1', sent1), ('len1', len1),
+                        ('lang2', lang2), ('sent2', sent2), ('len2', len2),
+                        ('lang3', lang3), ('sent3', sent3), ('len3', len3),
+                    ]))
 
         return (rank, results)
 
