@@ -320,18 +320,24 @@ def load_paraphrase_data(params, data):
         # load data
         data1 = load_binarized(path.replace('XX', '1'), params)
         data2 = load_binarized(path.replace('XX', '2'), params)
+        data3 = load_binarized(path.replace('XX', '2_shuffled'), params)
         set_parameters(params, data1['dico'])
         set_parameters(params, data2['dico'])
+        set_parameters(params, data3['dico'])
 
         # set / check dictionaries
-        if lang not in data['dico']:
-            data['dico'][lang] = data1['dico']
-        else:
-            assert data['dico'][lang] == data1['dico']
-        if lang not in data['dico']:
-            data['dico'][lang] = data2['dico']
-        else:
-            assert data['dico'][lang] == data2['dico']
+        # if lang not in data['dico']:
+        #     data['dico'][lang] = data1['dico']
+        # else:
+        #     assert data['dico'][lang] == data1['dico']
+        # if lang not in data['dico']:
+        #     data['dico'][lang] = data2['dico']
+        # else:
+        #     assert data['dico'][lang] == data2['dico']
+        # if lang not in data['dico']:
+        #     data['dico'][lang] = data3['dico']
+        # else:
+        #     assert data['dico'][lang] == data3['dico']
 
         paraphrase_data = ParallelDataset(
             data1['sentences'], data1['positions'], data['dico'][lang], params.lang2id[lang],
@@ -339,7 +345,14 @@ def load_paraphrase_data(params, data):
             params
         )
 
-        datasets.append(('test', paraphrase_data))
+        fake_paraphrase_data = ParallelDataset(
+            data1['sentences'], data1['positions'], data['dico'][lang], params.lang2id[lang],
+            data3['sentences'], data3['positions'], data['dico'][lang], params.lang2id[lang],
+            params
+        )
+
+        datasets.append(('test_real', paraphrase_data))
+        datasets.append(('test_fake', fake_paraphrase_data))
 
         # assert (lang1, lang2) not in data['paraphrase']
         data['paraphrase'][lang] = {k: v for k, v in datasets}

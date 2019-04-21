@@ -78,11 +78,11 @@ class EvaluatorMT(object):
             for batch in dataset.get_iterator(shuffle=False, group_by_size=True)():
                 yield batch if lang1 < lang2 else batch[::-1]
 
-    def get_paraphrase_iterator(self, data_type, lang):
+    def get_paraphrase_iterator(self, data_type, lang, real=True):
         """
         Create a new iterator for a dataset.
         """
-        assert data_type in ['valid', 'test']
+        assert data_type in ['test_real', 'test_fake']
 
         dataset = self.data['paraphrase'][lang][data_type]
         dataset.batch_size = 32
@@ -272,7 +272,6 @@ class EvaluatorMT(object):
         4. SES/PINC
         """
         logger.info("Evaluating %s paraphrase (%s) ..." % (lang, data_type))
-        assert data_type in ['valid', 'test']
         self.encoder.eval()
         self.decoder.eval()
         params = self.params
@@ -351,7 +350,8 @@ class EvaluatorMT(object):
         with torch.no_grad():
 
             for lang in self.data['paraphrase'].keys():
-                self.eval_paraphrase(lang, 'test', scores)
+                self.eval_paraphrase(lang, 'test_real', scores)
+                self.eval_paraphrase(lang, 'test_fake', scores)
 
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
