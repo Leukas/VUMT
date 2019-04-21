@@ -12,7 +12,7 @@ from logging import getLogger
 import numpy as np
 import torch
 from torch import nn
-
+from scipy.stats import norm
 from .utils import restore_segmentation
 
 
@@ -263,7 +263,68 @@ class EvaluatorMT(object):
         scores['ppl_%s_%s_%s_%s' % (lang1, lang2, lang3, data_type)] = np.exp(xe_loss / count)
         scores['bleu_%s_%s_%s_%s' % (lang1, lang2, lang3, data_type)] = bleu
 
-    def eval_paraphrase(self, lang, data_type, scores):
+    def eval_paraphrase_recog(self, lang, scores):
+        """
+        Evaluate lang paraphrase recognition, which involves
+        1. Computing cosine similarities on real paraphrases
+        2. Computing cosine similarities on fake paraphrases
+        3. Computing a decision criterion and separability score
+        """
+        for data_type in ['test_real', 'test_fake']:
+            logger.info("Evaluating %s paraphrase (%s) ..." % (lang, data_type))
+            self.encoder.eval()
+            self.decoder.eval()
+            params = self.params
+            lang_id = params.lang2id[lang]
+
+            # hypothesis
+            txt = []
+
+            all_sim = 0 
+            n_sents = 0
+            sims = torch.Tensor().cuda()
+            for batch in self.get_paraphrase_iterator(data_type, lang):
+
+                # batch
+                (sent1, len1), (sent2, len2) = batch
+                sent1, sent2 = sent1.cuda(), sent2.cuda()
+
+                # encode / decode / generate
+                encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
+                encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
+
+                sim = cosine_sim(encoded1.dis_input, encoded2.dis_input)
+                sims = torch.cat((sims, sim))
+
+            mean_cos_sim = sims.mean(dim=0).item()
+            std_cos_sim = sims.std(dim=0).item()
+            logger.info("MEAN_COS_SIM : %f" % (mean_cos_sim))
+            logger.info("STD_COS_SIM : %f" % (std_cos_sim))
+
+            # update scores
+            scores['meancossim_%s_%s' % (lang, data_type)] = mean_cos_sim
+            scores['stdcossim_%s_%s' % (lang, data_type)] = std_cos_sim
+
+        if scores['meancossim_%s_%s' % (lang, 'test_real')] < scores['meancossim_%s_%s' % (lang, 'test_fake')]:
+            # this really should never happen except for maybe early in training...
+            sc = sim_score(
+                scores['meancossim_%s_%s' % (lang, 'test_fake')],
+                scores['stdcossim_%s_%s' % (lang, 'test_fake')],
+                scores['meancossim_%s_%s' % (lang, 'test_real')],
+                scores['stdcossim_%s_%s' % (lang, 'test_real')])
+        else:
+            sc = sim_score(
+                scores['meancossim_%s_%s' % (lang, 'test_fake')],
+                scores['stdcossim_%s_%s' % (lang, 'test_fake')],
+                scores['meancossim_%s_%s' % (lang, 'test_real')],
+                scores['stdcossim_%s_%s' % (lang, 'test_real')])
+
+        logger.info("SIM_SCORE: %f" % (sc))
+
+        # update scores
+        scores['simscore_%s_%s' % (lang, data_type)] = sc
+
+    def eval_paraphrase_gen(self, lang, scores):
         """
         Evaluate lang - lang paraphrases
         1. Cosine similarity
@@ -271,58 +332,64 @@ class EvaluatorMT(object):
         3. METEOR/PINC
         4. SES/PINC
         """
-        logger.info("Evaluating %s paraphrase (%s) ..." % (lang, data_type))
-        self.encoder.eval()
-        self.decoder.eval()
-        params = self.params
-        lang_id = params.lang2id[lang]
+        for data_type in ['test_real', 'test_fake']:
+            logger.info("Evaluating %s paraphrase (%s) ..." % (lang, data_type))
+            self.encoder.eval()
+            self.decoder.eval()
+            params = self.params
+            lang_id = params.lang2id[lang]
 
-        # hypothesis
-        txt = []
+            # hypothesis
+            txt = []
 
-        all_sim = 0 
-        n_sents = 0
-        for batch in self.get_paraphrase_iterator(data_type, lang):
+            all_sim = 0 
+            n_sents = 0
+            sims = torch.Tensor()
+            for batch in self.get_paraphrase_iterator(data_type, lang):
 
-            # batch
-            (sent1, len1), (sent2, len2) = batch
-            sent1, sent2 = sent1.cuda(), sent2.cuda()
+                # batch
+                (sent1, len1), (sent2, len2) = batch
+                sent1, sent2 = sent1.cuda(), sent2.cuda()
 
-            # encode / decode / generate
-            encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
-            encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
+                # encode / decode / generate
+                encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
+                encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
 
-            sim = cosine_sim(encoded1.dis_input, encoded2.dis_input)
-            n_sents += sim.size(0)
-            all_sim += sim.sum(dim=0)
+                sim = cosine_sim(encoded1.dis_input, encoded2.dis_input)
+                sims = torch.cat((sims, sim))
+                # n_sents += sim.size(0)
+                # all_sim += sim.sum(dim=0)
 
-            # decoded = self.decoder(encoded, sent2[:-1], lang2_id)
-            # sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
 
-            # convert to text
-            # txt.extend(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params))
+                # decoded = self.decoder(encoded, sent2[:-1], lang2_id)
+                # sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
 
-        # hypothesis / reference paths
-        # hyp_name = 'hyp{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_type)
-        # hyp_path = os.path.join(params.dump_path, hyp_name)
-        # ref_path = params.ref_paths[(lang1, lang2, data_type)]
+                # convert to text
+                # txt.extend(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params))
 
-        
-        # export sentences to hypothesis file / restore BPE segmentation
-        # with open(hyp_path, 'w', encoding='utf-8') as f:
-        #     txt = '\n'.join(txt) + '\n'
-        #     txt = restore_segmentation(txt)            
-        #     f.write(txt)
+            # hypothesis / reference paths
+            # hyp_name = 'hyp{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_type)
+            # hyp_path = os.path.join(params.dump_path, hyp_name)
+            # ref_path = params.ref_paths[(lang1, lang2, data_type)]
 
-        # evaluate BLEU score
-        # bleu = eval_moses_bleu(ref_path, hyp_path)
-        # logger.info("BLEU %s %s : %f" % (hyp_path, ref_path, bleu))
-        avg_cos_sim = all_sim/n_sents
-        logger.info("AVG_COS_SIM : %f" % (avg_cos_sim))
+            
+            # export sentences to hypothesis file / restore BPE segmentation
+            # with open(hyp_path, 'w', encoding='utf-8') as f:
+            #     txt = '\n'.join(txt) + '\n'
+            #     txt = restore_segmentation(txt)            
+            #     f.write(txt)
 
-        # update scores
-        scores['avgcossim_%s_%s' % (lang, data_type)] = avg_cos_sim.item()
+            # evaluate BLEU score
+            # bleu = eval_moses_bleu(ref_path, hyp_path)
+            # logger.info("BLEU %s %s : %f" % (hyp_path, ref_path, bleu))
+            mean_cos_sim = sims.mean(dim=0).item()
+            std_cos_sim = sims.std(dim=0).item()
+            logger.info("MEAN_COS_SIM : %f" % (mean_cos_sim))
+            logger.info("STD_COS_SIM : %f" % (std_cos_sim))
 
+            # update scores
+            scores['meancossim_%s_%s' % (lang, data_type)] = mean_cos_sim.item()
+            scores['stdcossim_%s_%s' % (lang, data_type)] = std_cos_sim.item()
 
 
     def run_vae_evals(self, epoch):
@@ -350,8 +417,7 @@ class EvaluatorMT(object):
         with torch.no_grad():
 
             for lang in self.data['paraphrase'].keys():
-                self.eval_paraphrase(lang, 'test_real', scores)
-                self.eval_paraphrase(lang, 'test_fake', scores)
+                self.eval_paraphrase_recog(lang, scores)
 
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
@@ -475,6 +541,30 @@ def cosine_sim(enc1, enc2):
     vec1 = enc1.sum(dim=0) / np.sqrt(enc1.size(0))
     vec2 = enc2.sum(dim=0) / np.sqrt(enc2.size(0))
     return torch.nn.functional.cosine_similarity(vec1, vec2, dim=-1)
+
+def sim_score(mu1, sigma1, mu2, sigma2):
+    """
+    Compute the similarity score, which is 1 minus the area under the intersection of 2 gaussians
+    """
+    assert mu1 < mu2, "mu1 should be smaller than mu2."
+    if sigma1 == sigma2:
+        intersect = (mu1 + mu2)/2
+    else:
+        var1 = sigma1**2
+        var2 = sigma2**2
+        var_diff = var1-var2
+        rat = np.sqrt((mu1 - mu2)**2 + 2*var_diff*np.log(sigma1 / sigma2))
+        numer = mu2 * var1 - sigma2 * (mu1 * sigma2 + sigma1 * rat)
+        intersect = numer / var_diff
+
+    if not (mu1 < intersect < mu2):
+        logger.warn("Intersection does not lie between mu1 and mu2.")
+    # assert mu1 < intersect < mu2, "intersection is not between mu1 and mu2."
+    # print(mu1, intersect, mu2)
+
+
+    return norm.cdf(intersect, mu1, sigma1) - norm.cdf(intersect, mu2, sigma2)
+
 
 def convert_to_text(batch, lengths, dico, lang_id, params):
     """
