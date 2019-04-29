@@ -399,6 +399,9 @@ class EvaluatorMT(object):
         imd_lang_id = self.params.lang2id[imd_lang]
         output_lang_id = self.params.lang2id[output_lang]
         txt = []
+        self.encoder.eval()
+        self.decoder.eval()
+
 
         for i in range(5):
             for batch in dataset.get_iterator(shuffle=False)():
