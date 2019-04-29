@@ -390,31 +390,40 @@ class EvaluatorMT(object):
             scores['meancossim_%s_%s' % (lang, data_type)] = mean_cos_sim.item()
             scores['stdcossim_%s_%s' % (lang, data_type)] = std_cos_sim.item()
 
-    def custom_eval(self, filepath, input_lang, output_lang, scores):
+    def custom_eval(self, filepath, input_lang, imd_lang, output_lang, scores):
         """
         Run on custom data with custom methods
         """
         dataset = load_custom_data(filepath, input_lang, self.params, self.data)
         input_lang_id = self.params.lang2id[input_lang]
+        imd_lang_id = self.params.lang2id[imd_lang]
         output_lang_id = self.params.lang2id[output_lang]
         txt = []
-        for batch in dataset.get_iterator(shuffle=False)():
-            (sent1, len1) = batch
-            sent1 = sent1.cuda()
-            encoded = self.encoder(sent1, len1, input_lang_id, noise=20.0)
-            sent2_, len2_, _ = self.decoder.generate(encoded, output_lang_id)
 
-            txt.extend(convert_to_text(sent2_, len2_, self.dico[output_lang], output_lang_id, self.params))
+        for i in range(5):
+            for batch in dataset.get_iterator(shuffle=False)():
+                (sent1, len1) = batch
+                sent1 = sent1.cuda()
+                encoded = self.encoder(sent1, len1, input_lang_id, noise=0)
+                sent2_, len2_, _ = self.decoder.generate(encoded, imd_lang_id)
 
-        # hypothesis / reference paths
-        hyp_name = 'cust{0}.{1}-{2}.txt'.format(scores['epoch'], input_lang, output_lang)
-        hyp_path = os.path.join(self.params.dump_path, hyp_name)
+                # encode / decode / generate lang2 -> lang3
+                encoded = self.encoder(sent2_.cuda(), len2_, imd_lang_id, noise=i*10.0+10)
+                sent3_, len3_, _ = self.decoder.generate(encoded, output_lang_id)
 
-        # export sentences to hypothesis file / restore BPE segmentation
-        with open(hyp_path, 'w', encoding='utf-8') as f:
-            txt = '\n'.join(txt) + '\n'
-            txt = restore_segmentation(txt)            
-            f.write(txt)
+
+                # txt.extend(convert_to_text(sent2_, len2_, self.dico[output_lang], output_lang_id, self.params))
+                txt.extend(convert_to_text(sent3_, len3_, self.dico[output_lang], output_lang_id, self.params))
+
+            # hypothesis / reference paths
+            hyp_name = 'cust{0}.{1}-{2}-{3}.txt'.format(i*10.0+10, input_lang, imd_lang, output_lang)
+            hyp_path = os.path.join(self.params.dump_path, hyp_name)
+
+            # export sentences to hypothesis file / restore BPE segmentation
+            with open(hyp_path, 'w', encoding='utf-8') as f:
+                txt = '\n'.join(txt) + '\n'
+                txt = restore_segmentation(txt)            
+                f.write(txt)
 
 
             # encode / decode / generate
@@ -443,7 +452,7 @@ class EvaluatorMT(object):
 
         with torch.no_grad():
             filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
-            self.custom_eval(filepath, 'en', 'en', scores)
+            self.custom_eval(filepath, 'en','fr', 'en', scores)
 
 
             for lang in self.data['paraphrase'].keys():
