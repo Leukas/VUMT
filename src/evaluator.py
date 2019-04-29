@@ -398,12 +398,12 @@ class EvaluatorMT(object):
         input_lang_id = self.params.lang2id[input_lang]
         imd_lang_id = self.params.lang2id[imd_lang]
         output_lang_id = self.params.lang2id[output_lang]
-        txt = []
         self.encoder.eval()
         self.decoder.eval()
 
 
         for i in range(5):
+            txt = []
             for batch in dataset.get_iterator(shuffle=False)():
                 (sent1, len1) = batch
                 sent1 = sent1.cuda()
