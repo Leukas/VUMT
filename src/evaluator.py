@@ -14,8 +14,8 @@ import torch
 from torch import nn
 from scipy.stats import norm
 from .utils import restore_segmentation
-
-
+from nltk.translate.bleu_score import corpus_bleu
+from src.data.loader import load_custom_data
 logger = getLogger()
 
 
@@ -78,7 +78,7 @@ class EvaluatorMT(object):
             for batch in dataset.get_iterator(shuffle=False, group_by_size=True)():
                 yield batch if lang1 < lang2 else batch[::-1]
 
-    def get_paraphrase_iterator(self, data_type, lang, real=True):
+    def get_paraphrase_iterator(self, data_type, lang):
         """
         Create a new iterator for a dataset.
         """
@@ -322,7 +322,7 @@ class EvaluatorMT(object):
         logger.info("SIM_SCORE: %f" % (sc))
 
         # update scores
-        scores['simscore_%s_%s' % (lang, data_type)] = sc
+        scores['simscore_%s' % (lang)] = sc
 
     def eval_paraphrase_gen(self, lang, scores):
         """
@@ -353,7 +353,6 @@ class EvaluatorMT(object):
 
                 # encode / decode / generate
                 encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
-                encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
 
                 sim = cosine_sim(encoded1.dis_input, encoded2.dis_input)
                 sims = torch.cat((sims, sim))
@@ -391,6 +390,34 @@ class EvaluatorMT(object):
             scores['meancossim_%s_%s' % (lang, data_type)] = mean_cos_sim.item()
             scores['stdcossim_%s_%s' % (lang, data_type)] = std_cos_sim.item()
 
+    def custom_eval(self, filepath, input_lang, output_lang, scores):
+        """
+        Run on custom data with custom methods
+        """
+        dataset = load_custom_data(filepath, input_lang, self.params, self.data)
+        input_lang_id = self.params.lang2id[input_lang]
+        output_lang_id = self.params.lang2id[output_lang]
+        txt = []
+        for batch in dataset.get_iterator(shuffle=False)():
+            (sent1, len1) = batch
+            sent1 = sent1.cuda()
+            encoded = self.encoder(sent1, len1, input_lang_id, noise=20.0)
+            sent2_, len2_, _ = self.decoder.generate(encoded, output_lang_id)
+
+            txt.extend(convert_to_text(sent2_, len2_, self.dico[output_lang], output_lang_id, self.params))
+
+        # hypothesis / reference paths
+        hyp_name = 'cust{0}.{1}-{2}.txt'.format(scores['epoch'], input_lang, output_lang)
+        hyp_path = os.path.join(self.params.dump_path, hyp_name)
+
+        # export sentences to hypothesis file / restore BPE segmentation
+        with open(hyp_path, 'w', encoding='utf-8') as f:
+            txt = '\n'.join(txt) + '\n'
+            txt = restore_segmentation(txt)            
+            f.write(txt)
+
+
+            # encode / decode / generate
 
     def run_vae_evals(self, epoch):
         """
@@ -415,8 +442,13 @@ class EvaluatorMT(object):
         scores = OrderedDict({'epoch': epoch})
 
         with torch.no_grad():
+            filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
+            self.custom_eval(filepath, 'en', 'en', scores)
+
 
             for lang in self.data['paraphrase'].keys():
+                # print('LANG LANG', lang)
+                # self.multi_sample_eval(lang, lang, 'test_real', scores)
                 self.eval_paraphrase_recog(lang, scores)
 
             for lang1, lang2 in self.data['para'].keys():
@@ -476,7 +508,64 @@ class EvaluatorMT(object):
             
         # restore_cmd = "sed -i -r 's/(@@ )|(@@ ?$)//g' %s"
         # os.system(restore_cmd % hyp_path)
+
+    def multi_sample_eval(self, lang1, lang2, data_type, scores):
+        """
+            Samples several times and chooses with a choice function
+        """
+        self.encoder.eval()
+        self.decoder.eval()
+        params = self.params
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2]
     
+        subprocess.Popen("mkdir -p %s" % os.path.join(params.dump_path, 'vae'), shell=True).wait()
+        # hypothesis
+
+        iterator = self.get_paraphrase_iterator(data_type, lang1) \
+            if data_type in ['test_real', 'test_fake'] \
+            else self.get_iterator(data_type, lang1, lang2)
+
+
+        src_txt = []
+        tgt_txt = []
+        hyp_txts = [[] for i in range(params.eval_samples)]
+        for i in range(params.eval_samples):
+            txt = []
+            # logger.info("i = %d" % i)
+            for j, batch in enumerate(iterator):
+            
+                # batch
+                (sent1, len1), (sent2, len2) = batch
+                sent1, sent2 = sent1.cuda(), sent2.cuda()
+
+                # encode / decode / generate
+                # if i == 0: # first eval always the "most likely output"
+                #     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
+                # else:
+                encoded = self.encoder(sent1, len1, lang1_id, noise=5.0*i)
+                sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
+
+                hyp_txts[i].extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
+                if i == 0:
+                    src_txt.extend(restore_segmentation(convert_to_text(sent1, len1, self.dico[lang1], lang1_id, self.params)))
+                    tgt_txt.extend(restore_segmentation(convert_to_text(sent2, len2, self.dico[lang2], lang2_id, self.params)))
+
+
+        final_hyp_txt = choose_sentences(hyp_txts, 'random', self.params)
+
+        final_bleu_score = eval_nltk_bleu(tgt_txt, final_hyp_txt)
+        final_pinc_score = eval_pinc(src_txt, final_hyp_txt)
+
+
+        logger.info("BLEU : %f" % (final_bleu_score))
+        logger.info("PINC : %f" % (final_pinc_score))
+
+            # update scores
+        scores['bleu_%s_%s' % (lang1, data_type)] = final_bleu_score
+        scores['pinc_%s_%s' % (lang1, data_type)] = final_pinc_score
+
+
     def paraphrase_vae(self, lang1, lang2, data_type, scores):
         self.encoder.eval()
         self.decoder.eval()
@@ -532,6 +621,39 @@ def eval_moses_bleu(ref, hyp):
         logger.warning('Impossible to parse BLEU score! "%s"' % result)
         return -1
 
+def eval_nltk_bleu(ref, hyp):
+    """
+    Given texts of structure: [ref1, ref2, ref3], [hyp1, hyp2, hyp3]
+    Convert to proper structure for corpus_bleu, and run it.
+    """
+    ref_bleu = [[r.split()] for r in ref]
+    hyp_bleu = [h.split() for h in hyp]
+    return corpus_bleu(ref, hyp)
+
+def eval_pinc(ref, hyp):
+    pinc_sum = 0.0
+    for i in range(len(ref)):
+        pinc_sum += pinc_score(ref[i].split(), hyp[i].split())
+    return pinc_sum / len(ref)
+
+def pinc_score(src_sen, can_sen, max_ngram=4):
+    """
+    PINC score, as defined in 
+    "Collecting Highly Parallel Data for Paraphrase Evaluation" (Chen et al. 2011)
+    """
+    src_ngrams = {}
+    for n in range(max_ngram):
+        src_ngrams[n] = [src_sen[i:i+n+1] for i in range(len(src_sen)-n)]
+
+    ngram_counts = np.zeros(max_ngram)
+    ngram_totals = np.array([len(can_sen) - i + 1 for i in range(1, max_ngram+1)])
+
+    for n in range(max_ngram):
+        for i in range(ngram_totals[n]):
+            ngram_counts[n] += can_sen[i:n+i+1] in src_ngrams[n]
+
+    pinc = np.sum(1 - ngram_counts/ngram_totals) / max_ngram
+    return pinc
 
 def cosine_sim(enc1, enc2):
     """
@@ -565,6 +687,16 @@ def sim_score(mu1, sigma1, mu2, sigma2):
 
     return norm.cdf(intersect, mu1, sigma1) - norm.cdf(intersect, mu2, sigma2)
 
+def choose_sentences(texts, method, params):
+    """ Choose sentences """
+    if method == 'random':
+        final_text = []
+        for i in range(len(texts[0])):
+            idx = np.random.choice(params.eval_samples)
+            final_text.append(texts[idx][i])
+        return final_text
+    else:
+        pass # TODO: AWD choice
 
 def convert_to_text(batch, lengths, dico, lang_id, params):
     """

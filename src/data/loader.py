@@ -360,6 +360,17 @@ def load_paraphrase_data(params, data):
     logger.info('')
 
 
+def load_custom_data(path, lang, params, data):
+    cust_data = load_binarized(path, params)
+    set_parameters(params, cust_data['dico'])
+
+    # monolingual data
+    cust_data = MonolingualDataset(cust_data['sentences'], cust_data['positions'],
+                                    data['dico'][lang], params.lang2id[lang], params)
+    cust_data.batch_size = params.batch_size
+
+    return cust_data
+
 def check_all_data_params(params):
     """
     Check datasets parameters.

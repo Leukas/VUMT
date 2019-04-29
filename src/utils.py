@@ -360,7 +360,13 @@ def restore_segmentation(text):
     """
     Take a text segmented with BPE and restore it to its original segmentation.
     """
-    return re.sub("(@@ )|(@@ ?$)","", text)
+    if isinstance(text, list):
+        new_txt = []
+        for sen in text:
+            new_txt.append(re.sub("(@@ )|(@@ ?$)","", sen))
+        return new_txt
+    else:
+        return re.sub("(@@ )|(@@ ?$)","", text)
 
 
 def create_word_masks(params, data):
