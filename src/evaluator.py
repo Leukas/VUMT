@@ -14,7 +14,7 @@ import torch
 from torch import nn
 from scipy.stats import norm
 from .utils import restore_segmentation
-from nltk.translate.bleu_score import corpus_bleu
+from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
 from src.data.loader import load_custom_data
 logger = getLogger()
 
@@ -454,8 +454,8 @@ class EvaluatorMT(object):
         scores = OrderedDict({'epoch': epoch})
 
         with torch.no_grad():
-            filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
-            self.custom_eval(filepath, 'en','fr', 'en', scores)
+            # filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
+            # self.custom_eval(filepath, 'en','fr', 'en', scores)
 
 
             for lang in self.data['paraphrase'].keys():
@@ -465,8 +465,14 @@ class EvaluatorMT(object):
 
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
+                    if self.params.eval_only:
+                        self.multi_sample_eval(lang1, lang2, data_type, scores)
+                        self.multi_sample_eval(lang2, lang1, data_type, scores)
+                    
                     self.eval_para(lang1, lang2, data_type, scores)
                     self.eval_para(lang2, lang1, data_type, scores)
+
+                    
 
             for lang1, lang2, lang3 in self.params.pivo_directions:
                 for data_type in ['valid', 'test']:
@@ -534,18 +540,18 @@ class EvaluatorMT(object):
         subprocess.Popen("mkdir -p %s" % os.path.join(params.dump_path, 'vae'), shell=True).wait()
         # hypothesis
 
-        iterator = self.get_paraphrase_iterator(data_type, lang1) \
+        iterator = lambda: self.get_paraphrase_iterator(data_type, lang1) \
             if data_type in ['test_real', 'test_fake'] \
             else self.get_iterator(data_type, lang1, lang2)
 
 
         src_txt = []
         tgt_txt = []
-        hyp_txts = [[] for i in range(params.eval_samples)]
+        hyp_txts = []
         for i in range(params.eval_samples):
             txt = []
             # logger.info("i = %d" % i)
-            for j, batch in enumerate(iterator):
+            for j, batch in enumerate(iterator()):
             
                 # batch
                 (sent1, len1), (sent2, len2) = batch
@@ -558,24 +564,25 @@ class EvaluatorMT(object):
                 encoded = self.encoder(sent1, len1, lang1_id, noise=5.0*i)
                 sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
 
-                hyp_txts[i].extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
+                txt.extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
                 if i == 0:
                     src_txt.extend(restore_segmentation(convert_to_text(sent1, len1, self.dico[lang1], lang1_id, self.params)))
                     tgt_txt.extend(restore_segmentation(convert_to_text(sent2, len2, self.dico[lang2], lang2_id, self.params)))
 
+            hyp_txts.append(txt)
 
-        final_hyp_txt = choose_sentences(hyp_txts, 'random', self.params)
+        final_hyp_txt = choose_sentences(hyp_txts, 'best', self.params, tgt_txt=tgt_txt)
 
         final_bleu_score = eval_nltk_bleu(tgt_txt, final_hyp_txt)
         final_pinc_score = eval_pinc(src_txt, final_hyp_txt)
 
 
-        logger.info("BLEU : %f" % (final_bleu_score))
-        logger.info("PINC : %f" % (final_pinc_score))
+        logger.info("MULTI_BLEU : %f" % (final_bleu_score))
+        logger.info("MULTI_PINC : %f" % (final_pinc_score))
 
             # update scores
-        scores['bleu_%s_%s' % (lang1, data_type)] = final_bleu_score
-        scores['pinc_%s_%s' % (lang1, data_type)] = final_pinc_score
+        scores['multi_bleu_%s_%s_%s' % (lang1, lang2, data_type)] = final_bleu_score
+        scores['multi_pinc_%s_%s_%s' % (lang1, lang2, data_type)] = final_pinc_score
 
 
     def paraphrase_vae(self, lang1, lang2, data_type, scores):
@@ -699,13 +706,25 @@ def sim_score(mu1, sigma1, mu2, sigma2):
 
     return norm.cdf(intersect, mu1, sigma1) - norm.cdf(intersect, mu2, sigma2)
 
-def choose_sentences(texts, method, params):
+def choose_sentences(texts, method, params, tgt_txt=None):
     """ Choose sentences """
     if method == 'random':
         final_text = []
         for i in range(len(texts[0])):
             idx = np.random.choice(params.eval_samples)
             final_text.append(texts[idx][i])
+        return final_text
+    elif method == 'best': # choosing best BLEU, just to show theoretical max
+        final_text = []
+        for i in range(len(texts[0])):
+            best_bleu = 0
+            best_bleu_idx = 0
+            for j in range(params.eval_samples):
+                b = sentence_bleu(tgt_txt[i].split(), texts[j][i].split())
+                if b > best_bleu:
+                    best_bleu = b
+                    best_bleu_idx = j
+            final_text.append(texts[best_bleu_idx][i])
         return final_text
     else:
         pass # TODO: AWD choice
