@@ -465,9 +465,11 @@ class EvaluatorMT(object):
 
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
-                    if self.params.eval_only:
+                    if self.params.eval_only and self.params.variational:
+                        self.variation_eval(lang1, lang2, data_type, scores)
                         self.multi_sample_eval(lang1, lang2, data_type, scores)
                         self.multi_sample_eval(lang2, lang1, data_type, scores)
+
                     
                     self.eval_para(lang1, lang2, data_type, scores)
                     self.eval_para(lang2, lang1, data_type, scores)
@@ -583,6 +585,57 @@ class EvaluatorMT(object):
             # update scores
         scores['multi_bleu_%s_%s_%s' % (lang1, lang2, data_type)] = final_bleu_score
         scores['multi_pinc_%s_%s_%s' % (lang1, lang2, data_type)] = final_pinc_score
+
+
+    def variation_eval(self, lang1, lang2, data_type, scores):
+        """
+            Measure variation of a VAE by checking bleu scores between sentences
+        """
+        self.encoder.eval()
+        self.decoder.eval()
+        params = self.params
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2]
+    
+        subprocess.Popen("mkdir -p %s" % os.path.join(params.dump_path, 'vae'), shell=True).wait()
+        # hypothesis
+
+        iterator = lambda: self.get_paraphrase_iterator(data_type, lang1) \
+            if data_type in ['test_real', 'test_fake'] \
+            else self.get_iterator(data_type, lang1, lang2)
+
+        hyp_txts = []
+        for i in range(10):
+            txt = []
+            # logger.info("i = %d" % i)
+            for j, batch in enumerate(iterator()):
+            
+                # batch
+                (sent1, len1), (sent2, len2) = batch
+                sent1, sent2 = sent1.cuda(), sent2.cuda()
+
+                # encode / decode / generate
+                # if i == 0: # first eval always the "most likely output"
+                #     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
+                # else:
+                encoded = self.encoder(sent1, len1, lang1_id, noise=10.0*i)
+                sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
+
+                txt.extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
+                if j == 10:
+                    break
+            hyp_txts.append(txt)
+
+        for i in range(1, 10):
+            final_bleu_score = eval_nltk_bleu(hyp_txts[0], hyp_txts[i])*100
+            logger.info("VAR_BLEU_%s_%s_%s (%d): %f" % (lang1, lang2, data_type, 10.0*i, final_bleu_score))
+        # final_pinc_score = eval_pinc(src_txt, final_hyp_txt)
+
+        # logger.info("MULTI_PINC : %f" % (final_pinc_score))
+
+            # update scores
+        # scores['multi_bleu_%s_%s_%s' % (lang1, lang2, data_type)] = final_bleu_score
+        # scores['multi_pinc_%s_%s_%s' % (lang1, lang2, data_type)] = final_pinc_score
 
 
     def paraphrase_vae(self, lang1, lang2, data_type, scores):
