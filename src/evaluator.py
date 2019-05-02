@@ -573,7 +573,7 @@ class EvaluatorMT(object):
 
         final_hyp_txt = choose_sentences(hyp_txts, 'best', self.params, tgt_txt=tgt_txt)
 
-        final_bleu_score = eval_nltk_bleu(tgt_txt, final_hyp_txt)
+        final_bleu_score = eval_nltk_bleu(tgt_txt, final_hyp_txt)*100
         final_pinc_score = eval_pinc(src_txt, final_hyp_txt)
 
 
@@ -647,7 +647,7 @@ def eval_nltk_bleu(ref, hyp):
     """
     ref_bleu = [[r.split()] for r in ref]
     hyp_bleu = [h.split() for h in hyp]
-    return corpus_bleu(ref, hyp)
+    return corpus_bleu(ref_bleu, hyp_bleu)
 
 def eval_pinc(ref, hyp):
     pinc_sum = 0.0
