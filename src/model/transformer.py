@@ -112,6 +112,7 @@ class TransformerEncoder(nn.Module):
         x = F.dropout(x, p=self.dropout, training=self.training)
 
 
+
         # encoder layers
         for layer in self.layers:
             x = layer[lang_id](x, encoder_padding_mask)
@@ -308,7 +309,7 @@ class TransformerDecoder(nn.Module):
             left_pad=args.left_pad_target,
         )
 
-        self.layers = nn.ModuleList([None for i in range(args.encoder_layers)])
+        self.layers = nn.ModuleList([None for i in range(args.decoder_layers)])
         for k in range(args.decoder_layers):
             # share bottom share_dec layers
             layer_is_shared = (k < args.share_dec)
