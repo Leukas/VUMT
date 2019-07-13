@@ -136,6 +136,7 @@ class TransformerEncoder(nn.Module):
                 noise = (noise.t() * (noise_mag / cur_mag)).t()
 
             noise = noise.type_as(x_std)
+            noise /= x_std.size()[0]
             x = noise.mul(x_std).add_(x_mean)
 
             return LatentState(
