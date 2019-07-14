@@ -56,65 +56,73 @@ def encode_hyps():
             embed(input_file, ref_lang, output_file)
 
 
-encode_refs()
-encode_hyps()
 
 
-def cossim(file, corpus1, corpus2):
+def cossim(file, ref_corpus, hyp_corpus):
+    """ 
+    Given a reference and system-output corpus, writes info to the given file in the following format.
+    Format per line: <METRIC NAME>   <LANG-PAIR>   <TEST SET>   <SYSTEM>   <SEGMENT NUMBER>   <SEGMENT SCORE> 
+    For example: BEER    cs-en   newstest2014    cu-moses.3383   1       248.796234
+
+    """
+    metric_name = "SES"
+    test_set = "newstest2014"
+
+    hyp_info = os.path.basename(hyp_corpus).split('.')
+    system_name = '.'.join(hyp_info[0:2])
+    lang_pair = hyp_info[2]
 
     dim = 1024
-    lang1 = np.fromfile(corpus1, dtype=np.float32, count=-1)
-    lang2 = np.fromfile(corpus2, dtype=np.float32, count=-1)
+    lang1 = np.fromfile(ref_corpus, dtype=np.float32, count=-1)
+    lang2 = np.fromfile(hyp_corpus, dtype=np.float32, count=-1)
     lang1.resize(lang1.shape[0] // dim, dim)
     lang2.resize(lang2.shape[0] // dim, dim)
 
     for i in range(lang1.shape[0]):
-        file.write(str(1-dist.cosine(lang1[i], lang2[i]))+'\n')
+        sim_str = str(1-dist.cosine(lang1[i], lang2[i]))
+        file.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i), sim_str, '\n']))
 
 
 def write_ses_score():
     subm_folder = '%s/u2/metrics/wmt14-metrics-task/submissions/SES/' % os.environ['HOME']
     if not os.path.isdir(subm_folder):
         os.mkdir(subm_folder)
-    
     f = open(os.path.join(subm_folder,'ses.seg.score'), 'w')
-    # for 
+    
 
+    enc_ref_folder = os.path.join(output_folder, 'references')
+
+    for ref_file in os.listdir(enc_ref_folder):
+        ref_path = os.path.join(enc_ref_folder, ref_file)
+
+        lang_pair, _ = ref_file.split('.')
+
+        enc_hyp_folder = os.path.join(output_folder, 'system-outputs', lang_pair)
+        for hyp_file in os.listdir(enc_hyp_folder):
+            hyp_path = os.path.join(enc_hyp_folder, hyp_file)
+            cossim(f, ref_path, hyp_path)
 
     f.close()
 
 
-
-def tokenize(filepath, lang):
-    TOKENIZER = '~/u2/tools/mosesdecoder/scripts/tokenizer/tokenizer.perl'
-    command = TOKENIZER + '-l %s < %s'
-    p = subprocess.Popen(command % (lang, filepath), stdout=subprocess.PIPE, shell=True)
-    result = p.communicate()[0].decode("utf-8")
-    print(result)
-    # if result.startswith('BLEU'):
-    #     return float(result[7:result.index(',')])
-    # else:
-    #     logger.warning('Impossible to parse BLEU score! "%s"' % result)
-    #     return -1
+if __name__ == "__main__":
+    # encode_refs()
+    # encode_hyps()
+    write_ses_score()
 
 
 
-
-# corpus1 = sys.argv[1]
-# corpus2 = sys.argv[2]
-# output = sys.argv[3]
-
-# dim = 1024
-# lang1 = np.fromfile(corpus1, dtype=np.float32, count=-1)
-# lang2 = np.fromfile(corpus2, dtype=np.float32, count=-1)
-# lang1.resize(lang1.shape[0] // dim, dim)
-# lang2.resize(lang2.shape[0] // dim, dim)
-
-# with open(output, 'w') as f:
-#         for i in range(lang1.shape[0]):
-#                 f.write(str(1-dist.cosine(lang1[i], lang2[i]))+'\n')
-
-
+# def tokenize(filepath, lang):
+#     TOKENIZER = '~/u2/tools/mosesdecoder/scripts/tokenizer/tokenizer.perl'
+#     command = TOKENIZER + '-l %s < %s'
+#     p = subprocess.Popen(command % (lang, filepath), stdout=subprocess.PIPE, shell=True)
+#     result = p.communicate()[0].decode("utf-8")
+#     print(result)
+#     # if result.startswith('BLEU'):
+#     #     return float(result[7:result.index(',')])
+#     # else:
+#     #     logger.warning('Impossible to parse BLEU score! "%s"' % result)
+#     #     return -1
 
 
 
