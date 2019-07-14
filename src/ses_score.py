@@ -6,8 +6,11 @@ import scipy.spatial.distance as dist
 
 # import source.embed as embed
 
-ref_folder = '%s/u2/metrics/wmt14-data/txt/references/' % os.environ['HOME']
-hyp_folder = '%s/u2/metrics/wmt14-data/txt/system-outputs/newstest2014/' % os.environ['HOME']
+# ref_folder = '%s/u2/metrics/wmt14-data/txt/references/' % os.environ['HOME']
+# hyp_folder = '%s/u2/metrics/wmt14-data/txt/system-outputs/newstest2014/' % os.environ['HOME']
+
+ref_folder = '%s/u2/metrics/wmt18-submitted-data/txt/references/' % os.environ['HOME']
+hyp_folder = '%s/u2/metrics/wmt18-submitted-data/txt/system-outputs/newstest2014/' % os.environ['HOME']
 output_folder = '%s/u2/metrics/encodings/' % os.environ['HOME']
 
 
@@ -80,11 +83,12 @@ def cossim(file, ref_corpus, hyp_corpus):
 
     for i in range(lang1.shape[0]):
         sim_str = str(1-dist.cosine(lang1[i], lang2[i]))
-        file.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i), sim_str, '\n']))
+        file.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), sim_str, 'non-emsemble', 'yes' + '\n']))
 
 
 def write_ses_score():
-    subm_folder = '%s/u2/metrics/wmt14-metrics-task/submissions/SES/' % os.environ['HOME']
+    # subm_folder = '%s/u2/metrics/wmt14-metrics-task/submissions/SES/' % os.environ['HOME']
+    subm_folder = '%s/u2/metrics/wmt18-metrics-task-package/submissions-as-received/SES/' % os.environ['HOME']
     if not os.path.isdir(subm_folder):
         os.mkdir(subm_folder)
     f = open(os.path.join(subm_folder,'ses.seg.score'), 'w')
