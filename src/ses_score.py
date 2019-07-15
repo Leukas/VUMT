@@ -4,6 +4,7 @@ import subprocess
 import numpy as np
 import scipy.spatial.distance as dist
 import argparse
+from nltk.translate.bleu_score import sentence_bleu
 # import source.embed as embed
 
 # ref_folder = '%s/u2/metrics/wmt14-data/txt/references/' % os.environ['HOME']
@@ -130,8 +131,15 @@ def write_ses_score():
     f.close()
 
 
+def bleu(ref_lines, hyp_lines):
+    """ sentence-level bleu, for comparison with ses"""
+    bleus = np.zeros(range(len(ref_lines)))
+    for i in range(len(ref_lines)):
+        refs = ref_lines[i].strip().split(' ')
+        hyp = hyp_lines[i].strip().split(' ')
+        bleus[i] = sentence_bleu([refs],hyp)
 
-
+    return bleus
 
 def calc_ses(exp_name, exp_id, hyp_num):
     # if not os.isdir('../encodings/'):
@@ -172,7 +180,9 @@ def calc_ses(exp_name, exp_id, hyp_num):
         with open(os.path.join(dump_path, hyp_file_exts[i]), 'r') as f:
             hyp_lines = f.readlines()
 
-        cos_inds = np.argsort(cos)[::-1]
+        bleus = bleu(ref_lines, hyp_lines)
+
+        cos_inds = np.argsort(cos-bleus)[::-1]
         # hyp_file = open(os.path.join(dump_path, hyp_file_exts[i]), 'r')
         with open('cos.' + ref_file_exts[i].split('.')[1:], 'w') as f:
             for ind in cos_inds:
