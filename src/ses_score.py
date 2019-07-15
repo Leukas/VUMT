@@ -98,8 +98,10 @@ def cossim(ref_corpus, hyp_corpus):
     lang2.resize(lang2.shape[0] // dim, dim)
 
     cossims = np.zeros(lang1.shape[0])
+    print(lang1.shape, lang2.shape)
 
     for i in range(lang1.shape[0]):
+        # print(i, lang1[i], lang2[i])
         cossims[i] = 1-dist.cosine(lang1[i], lang2[i])
 
     return cossims
@@ -154,12 +156,17 @@ def calc_ses(exp_name, exp_id, hyp_num):
 
         filepath = os.path.join(dump_path, file_ext)
         if not os.path.isfile(os.path.join(dump_path, output_file)):
-            embed(filepath, lang, output_file)
-    
+            # print('notafile:%s', os.path.join(dump_path, output_file))
+            embed(filepath, lang, os.path.join(dump_path, output_file))
+            
 
     cossims = []
     for i in range(4):
-        cos = cossim(os.path.join(dump_path, ref_file_exts[i]), os.path.join(dump_path, hyp_file_exts[i]))
+        ref_enc = os.path.join(dump_path, '.'.join(ref_file_exts[i].split('.')[:-1])+'.enc')
+        hyp_enc = os.path.join(dump_path, '.'.join(hyp_file_exts[i].split('.')[:-1])+'.enc')
+
+        # cos = cossim(os.path.join(dump_path, ref_file_exts[i]), os.path.join(dump_path, hyp_file_exts[i]))
+        cos = cossim(ref_enc, hyp_enc)
 
         lang_pair = ref_file_exts[i].split('.')[1]
         dataset = ref_file_exts[i].split('.')[2]
