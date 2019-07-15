@@ -167,6 +167,17 @@ def calc_ses(exp_name, exp_id, hyp_num):
 
         # cos = cossim(os.path.join(dump_path, ref_file_exts[i]), os.path.join(dump_path, hyp_file_exts[i]))
         cos = cossim(ref_enc, hyp_enc)
+        with open(os.path.join(dump_path, ref_file_exts[i]), 'r') as f:
+            ref_lines = f.readlines()
+        with open(os.path.join(dump_path, hyp_file_exts[i]), 'r') as f:
+            hyp_lines = f.readlines()
+
+        cos_inds = np.argsort(cos)[::-1]
+        # hyp_file = open(os.path.join(dump_path, hyp_file_exts[i]), 'r')
+        with open('cos.' + ref_file_exts[i].split('.')[1:], 'w') as f:
+            for ind in cos_inds:
+                f.write('\t'.join([cos[ind], ref_lines[ind], hyp_lines[ind]]))
+                
 
         lang_pair = ref_file_exts[i].split('.')[1]
         dataset = ref_file_exts[i].split('.')[2]
