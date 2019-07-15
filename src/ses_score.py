@@ -174,9 +174,9 @@ def calc_ses(exp_name, exp_id, hyp_num):
 
         cos_inds = np.argsort(cos)[::-1]
         # hyp_file = open(os.path.join(dump_path, hyp_file_exts[i]), 'r')
-        with open('cos.' + ref_file_exts[i].split('.')[1:], 'w') as f:
+        with open(os.path.join(dump_path,'cos.' + '.'.join(ref_file_exts[i].split('.')[1:])), 'w') as f:
             for ind in cos_inds:
-                f.write('\t'.join([cos[ind], ref_lines[ind], hyp_lines[ind]]))
+                f.write('\t'.join([str(cos[ind]), ref_lines[ind], hyp_lines[ind]]))
                 
 
         lang_pair = ref_file_exts[i].split('.')[1]
