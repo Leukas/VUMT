@@ -3,15 +3,15 @@ os.environ["LASER"]="%s/u2/tools/LASER/" % os.environ['HOME']
 import subprocess
 import numpy as np
 import scipy.spatial.distance as dist
-
+import argparse
 # import source.embed as embed
 
 # ref_folder = '%s/u2/metrics/wmt14-data/txt/references/' % os.environ['HOME']
 # hyp_folder = '%s/u2/metrics/wmt14-data/txt/system-outputs/newstest2014/' % os.environ['HOME']
 
 ref_folder = '%s/u2/metrics/wmt18-submitted-data/txt/references/' % os.environ['HOME']
-hyp_folder = '%s/u2/metrics/wmt18-submitted-data/txt/system-outputs/newstest2014/' % os.environ['HOME']
-output_folder = '%s/u2/metrics/encodings/' % os.environ['HOME']
+hyp_folder = '%s/u2/metrics/wmt18-submitted-data/txt/system-outputs/newstest2018/' % os.environ['HOME']
+output_folder = '%s/u2/metrics/encodings/wmt18/' % os.environ['HOME']
 
 
 def embed(input_file, lang, output_file):
@@ -23,10 +23,11 @@ def embed(input_file, lang, output_file):
     # result = p.communicate()[0].decode("utf-8")
     # print(result)
 
-def encode_refs():
+
+def encode_refs(ref_files):
     print('Encoding reference files...')
     # parse and encode references
-    for filename in os.listdir(ref_folder): # something like: newstest2014-csen-ref.cs
+    for filename in ref_files: # something like: newstest2014-csen-ref.cs
         langs = filename.split("-")[1] # csen
         ref_lang = filename.split(".")[1] # cs
 
@@ -42,10 +43,10 @@ def encode_refs():
         embed(input_file, ref_lang, output_file)
 
 
-def encode_hyps():
+def encode_hyps(hyp_files):
     print('Encoding hypothesis files...')
     # parse and encode system-outputs
-    for lang_pair in os.listdir(hyp_folder): 
+    for lang_pair in hyp_files: 
         ref_lang = lang_pair[3:]
 
         if not os.path.isdir(os.path.join(output_folder, 'system-outputs', lang_pair)):
@@ -61,7 +62,7 @@ def encode_hyps():
 
 
 
-def cossim(file, ref_corpus, hyp_corpus):
+def cossim_write(file, ref_corpus, hyp_corpus):
     """ 
     Given a reference and system-output corpus, writes info to the given file in the following format.
     Format per line: <METRIC NAME>   <LANG-PAIR>   <TEST SET>   <SYSTEM>   <SEGMENT NUMBER>   <SEGMENT SCORE> 
@@ -69,7 +70,7 @@ def cossim(file, ref_corpus, hyp_corpus):
 
     """
     metric_name = "SES"
-    test_set = "newstest2014"
+    test_set = "newstest2018"
 
     hyp_info = os.path.basename(hyp_corpus).split('.')
     system_name = '.'.join(hyp_info[0:2])
@@ -84,6 +85,24 @@ def cossim(file, ref_corpus, hyp_corpus):
     for i in range(lang1.shape[0]):
         sim_str = str(1-dist.cosine(lang1[i], lang2[i]))
         file.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), sim_str, 'non-emsemble', 'yes' + '\n']))
+
+
+def cossim(ref_corpus, hyp_corpus):
+    """ 
+    Given two corpora, return cosine similarities for each example
+    """
+    dim = 1024
+    lang1 = np.fromfile(ref_corpus, dtype=np.float32, count=-1)
+    lang2 = np.fromfile(hyp_corpus, dtype=np.float32, count=-1)
+    lang1.resize(lang1.shape[0] // dim, dim)
+    lang2.resize(lang2.shape[0] // dim, dim)
+
+    cossims = np.zeros(lang1.shape[0])
+
+    for i in range(lang1.shape[0]):
+        cossims[i] = 1-dist.cosine(lang1[i], lang2[i])
+
+    return cossims
 
 
 def write_ses_score():
@@ -104,16 +123,78 @@ def write_ses_score():
         enc_hyp_folder = os.path.join(output_folder, 'system-outputs', lang_pair)
         for hyp_file in os.listdir(enc_hyp_folder):
             hyp_path = os.path.join(enc_hyp_folder, hyp_file)
-            cossim(f, ref_path, hyp_path)
+            cossim_write(f, ref_path, hyp_path)
 
     f.close()
 
 
-if __name__ == "__main__":
-    # encode_refs()
-    # encode_hyps()
-    write_ses_score()
 
+
+
+def calc_ses(exp_name, exp_id, hyp_num):
+    # if not os.isdir('../encodings/'):
+    #     os.mkdir('../encodings/')
+    dump_path = os.path.join('../dumped/', exp_name, exp_id)
+
+    ref_file_exts = ['ref.en-fr.test.txt',
+        'ref.en-fr.valid.txt',
+        'ref.fr-en.test.txt',
+        'ref.fr-en.valid.txt']
+
+    hyp_file_exts = ['hyp%s.en-fr.test.txt' % str(hyp_num),
+        'hyp%s.en-fr.valid.txt' % str(hyp_num),
+        'hyp%s.fr-en.test.txt' % str(hyp_num),
+        'hyp%s.fr-en.valid.txt' % str(hyp_num)]
+
+    all_file_exts = ref_file_exts + hyp_file_exts
+
+    for file_ext in all_file_exts:
+        lang = file_ext.split('.')[1].split('-')[1]
+        output_file = '.'.join(file_ext.split('.')[:-1])+'.enc'
+
+        filepath = os.path.join(dump_path, file_ext)
+        if not os.path.isfile(os.path.join(dump_path, output_file)):
+            embed(filepath, lang, output_file)
+    
+
+    cossims = []
+    for i in range(4):
+        cos = cossim(os.path.join(dump_path, ref_file_exts[i]), os.path.join(dump_path, hyp_file_exts[i]))
+
+        lang_pair = ref_file_exts[i].split('.')[1]
+        dataset = ref_file_exts[i].split('.')[2]
+        print('SES %s %s: %.4f' % (lang_pair, dataset, np.mean(cos)))
+        cossims.append(np.mean(cos))
+    
+
+    
+parser = argparse.ArgumentParser(description='Language transfer')
+parser.add_argument("--encode_refs", action="store_true",
+                    help="Encode ref sentences (for WMT)")
+parser.add_argument("--encode_hyps", action="store_true",
+                    help="Encode hyp sentences (for WMT)")
+parser.add_argument("--write_ses", action="store_true",
+                    help="Write ses to file (for WMT)")
+parser.add_argument("--exp_name", type=str, default="",
+                    help="Experiment name")
+parser.add_argument("--exp_id", type=str, default="",
+                    help="Experiment ID")
+parser.add_argument("--hyp_num", type=str, default="",
+                    help="Hypothesis epoch num")
+params = parser.parse_args()
+
+
+
+
+if __name__ == "__main__":
+    if params.encode_refs:
+        encode_refs(os.listdir(ref_folder))
+    elif params.encode_hyps:
+        encode_hyps(os.listdir(hyp_folder))
+    elif params.write_ses:
+        write_ses_score()
+    else:
+        calc_ses(params.exp_name, params.exp_id, params.hyp_num)
 
 
 # def tokenize(filepath, lang):
