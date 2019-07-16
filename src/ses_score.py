@@ -37,8 +37,6 @@ def encode_refs(ref_files):
         else:
             langs = langs[2:] + '-' + langs[:2]
 
-        # todo: tokenize ref file
-        # tokenize(os.path.join(ref_folder, filename))
         input_file = os.path.join(ref_folder, filename)
         output_file = os.path.join(output_folder, 'references', '%s.%s' % (langs, ref_lang))
         embed(input_file, ref_lang, output_file)
@@ -59,34 +57,6 @@ def encode_hyps(hyp_files):
             input_file = os.path.join(lang_subfolder, system_file)
             output_file = os.path.join(output_folder, 'system-outputs', lang_pair, '%s.%s.%s' % (system_name, lang_pair, ref_lang))
             embed(input_file, ref_lang, output_file)
-
-
-
-
-def cossim_write(file, ref_corpus, hyp_corpus):
-    """ 
-    Given a reference and system-output corpus, writes info to the given file in the following format.
-    Format per line: <METRIC NAME>   <LANG-PAIR>   <TEST SET>   <SYSTEM>   <SEGMENT NUMBER>   <SEGMENT SCORE> 
-    For example: BEER    cs-en   newstest2014    cu-moses.3383   1       248.796234
-
-    """
-    metric_name = "SES"
-    test_set = "newstest2018"
-
-    hyp_info = os.path.basename(hyp_corpus).split('.')
-    system_name = '.'.join(hyp_info[0:2])
-    lang_pair = hyp_info[2]
-
-    dim = 1024
-    lang1 = np.fromfile(ref_corpus, dtype=np.float32, count=-1)
-    lang2 = np.fromfile(hyp_corpus, dtype=np.float32, count=-1)
-    lang1.resize(lang1.shape[0] // dim, dim)
-    lang2.resize(lang2.shape[0] // dim, dim)
-
-    for i in range(lang1.shape[0]):
-        sim_str = str(1-dist.cosine(lang1[i], lang2[i]))
-        file.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), sim_str, 'non-emsemble', 'yes' + '\n']))
-
 
 def cossim(ref_corpus, hyp_corpus):
     """ 
@@ -110,11 +80,14 @@ def cossim(ref_corpus, hyp_corpus):
 
 def write_ses_score():
     # subm_folder = '%s/u2/metrics/wmt14-metrics-task/submissions/SES/' % os.environ['HOME']
-    subm_folder = '%s/u2/metrics/wmt18-metrics-task-package/submissions-as-received/SES/' % os.environ['HOME']
+    subm_folder = '%s/u2/metrics/wmt18-metrics-task-package/final-metric-scores/submissions-processed/' % os.environ['HOME']
     if not os.path.isdir(subm_folder):
         os.mkdir(subm_folder)
     f = open(os.path.join(subm_folder,'ses.seg.score'), 'w')
     
+
+    metric_name = "SES"
+    test_set = "newstest2018"
 
     enc_ref_folder = os.path.join(output_folder, 'references')
 
@@ -126,7 +99,55 @@ def write_ses_score():
         enc_hyp_folder = os.path.join(output_folder, 'system-outputs', lang_pair)
         for hyp_file in os.listdir(enc_hyp_folder):
             hyp_path = os.path.join(enc_hyp_folder, hyp_file)
-            cossim_write(f, ref_path, hyp_path)
+
+            hyp_info = os.path.basename(hyp_path).split('.')
+            system_name = '.'.join(hyp_info[0:2])
+
+            cossims = cossim(ref_path, hyp_path)
+            for i in range(len(cossims)):
+                f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), str(cossims[i]), 'non-emsemble', 'yes' + '\n']))
+
+    f.close()
+
+def write_ses_bleu_score():
+    # subm_folder = '%s/u2/metrics/wmt14-metrics-task/submissions/SES/' % os.environ['HOME']
+    subm_folder = '%s/u2/metrics/wmt18-metrics-task-package/final-metric-scores/submissions-processed/' % os.environ['HOME']
+    if not os.path.isdir(subm_folder):
+        os.mkdir(subm_folder)
+    f = open(os.path.join(subm_folder,'ses_bleu.seg.score'), 'w')
+    
+
+    metric_name = "SES_BLEU"
+    test_set = "newstest2018"
+
+    enc_ref_folder = os.path.join(output_folder, 'references')
+
+    for ref_file in os.listdir(enc_ref_folder):
+        ref_path = os.path.join(enc_ref_folder, ref_file)
+
+        lang_pair, _ = ref_file.split('.')
+
+        bleu_ref_file = os.path.join(ref_folder, '-'.join([test_set, lang_pair[:2]+lang_pair[3:], 'ref.'+lang_pair[3:]]))
+
+        enc_hyp_folder = os.path.join(output_folder, 'system-outputs', lang_pair)
+        for hyp_file in os.listdir(enc_hyp_folder):
+            hyp_path = os.path.join(enc_hyp_folder, hyp_file)
+
+            hyp_info = os.path.basename(hyp_path).split('.')
+            system_name = '.'.join(hyp_info[0:2])
+
+            bleu_hyp_file = os.path.join(hyp_folder, lang_pair, '-'.join([system_name, lang_pair[:2]+lang_pair[3:], 'ref.'+lang_pair[3:]]))
+            
+            with open(bleu_ref_file, 'r') as rf:
+                ref_lines = rf.readlines()
+            with open(bleu_hyp_file, 'r') as hf:
+                hyp_lines = hf.readlines()
+            
+            bleus = bleu(ref_lines, hyp_lines)
+
+            cossims = cossim(ref_path, hyp_path)
+            for i in range(len(cossims)):
+                f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), str((cossims[i]+bleus[i])/2.0), 'non-emsemble', 'yes' + '\n']))
 
     f.close()
 
@@ -203,6 +224,8 @@ parser.add_argument("--encode_hyps", action="store_true",
                     help="Encode hyp sentences (for WMT)")
 parser.add_argument("--write_ses", action="store_true",
                     help="Write ses to file (for WMT)")
+parser.add_argument("--write_ses_bleu", action="store_true",
+                    help="Write ses+bleu to file (for WMT)")
 parser.add_argument("--exp_name", type=str, default="",
                     help="Experiment name")
 parser.add_argument("--exp_id", type=str, default="",
@@ -221,6 +244,8 @@ if __name__ == "__main__":
         encode_hyps(os.listdir(hyp_folder))
     elif params.write_ses:
         write_ses_score()
+    elif params.write_ses_bleu:
+        write_ses_bleu_score()
     else:
         calc_ses(params.exp_name, params.exp_id, params.hyp_num)
 
