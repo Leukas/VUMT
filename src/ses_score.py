@@ -99,7 +99,7 @@ def cossim(ref_corpus, hyp_corpus):
     lang2.resize(lang2.shape[0] // dim, dim)
 
     cossims = np.zeros(lang1.shape[0])
-    print(lang1.shape, lang2.shape)
+    # print(lang1.shape, lang2.shape)
 
     for i in range(lang1.shape[0]):
         # print(i, lang1[i], lang2[i])
@@ -133,10 +133,10 @@ def write_ses_score():
 
 def bleu(ref_lines, hyp_lines):
     """ sentence-level bleu, for comparison with ses"""
-    bleus = np.zeros(range(len(ref_lines)))
+    bleus = np.zeros(len(ref_lines))
     for i in range(len(ref_lines)):
-        refs = ref_lines[i].strip().split(' ')
-        hyp = hyp_lines[i].strip().split(' ')
+        refs = ref_lines[i].strip().lower().split(' ')
+        hyp = hyp_lines[i].strip().lower().split(' ')
         bleus[i] = sentence_bleu([refs],hyp)
 
     return bleus
@@ -186,7 +186,7 @@ def calc_ses(exp_name, exp_id, hyp_num):
         # hyp_file = open(os.path.join(dump_path, hyp_file_exts[i]), 'r')
         with open(os.path.join(dump_path,'cos.' + '.'.join(ref_file_exts[i].split('.')[1:])), 'w') as f:
             for ind in cos_inds:
-                f.write('\t'.join([str(cos[ind]), ref_lines[ind], hyp_lines[ind]]))
+                f.write('\t'.join([str(cos[ind]), str(bleus[ind]), ref_lines[ind], hyp_lines[ind]]))
                 
 
         lang_pair = ref_file_exts[i].split('.')[1]
