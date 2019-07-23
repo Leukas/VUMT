@@ -47,6 +47,8 @@ class TransformerEncoder(nn.Module):
 
         self.embed_noise_alpha = args.embed_noise_alpha
         self.sample_dist = args.sample_dist
+        self.word_neighbor = args.word_neighbor
+        self.word_neighbor_dist = args.word_neighbor_dist
 
         self.n_langs = args.n_langs
         self.n_words = args.n_words
@@ -91,6 +93,30 @@ class TransformerEncoder(nn.Module):
         if self.variational:
             self.var_ff = nn.Linear(args.encoder_embed_dim, args.encoder_embed_dim*2)
 
+    def neighbor_noise(self, src_tokens, lang_id):
+        # src tokens: len x batch_size
+
+        sen_len = src_tokens.size(0)
+        batch_size = src_tokens.size(1)
+
+        embed_tokens = self.embeddings[lang_id] # weight: vocab_size x emb_dim
+        src_emb = embed_tokens(src_tokens) # len x batch x emb_dim
+        src_emb = src_emb.view(-1, src_emb.size(2))
+        sims = src_emb @ embed_tokens.weight.t() # (len x batch) x vocab_size
+        sims = sims.view(sen_len, batch_size, -1) # len x batch x vocab_size
+
+        neighbors = torch.topk(sims, dim=2, k=self.word_neighbor_dist+1)[1] # len x batch x k-neighbors (+1 to ignore same word)
+        choices = torch.randint(1, self.word_neighbor_dist+1, (sen_len, batch_size))
+        choices += (torch.arange(sen_len*batch_size)*(self.word_neighbor_dist+1)).view(sen_len, batch_size)
+        chosen_neighbors = torch.take(neighbors, choices.cuda())
+
+        p_mask = torch.rand(sen_len, batch_size).cuda() < self.word_neighbor
+        pad_mask = 1-src_tokens.eq(self.padding_idx)
+        p_mask *= pad_mask # dont add noise to padding
+        p_mask[0,:] = 0 # dont change language token
+        
+        out = src_tokens.masked_scatter(p_mask, chosen_neighbors)
+        return out
 
 
     def forward(self, src_tokens, src_lengths, lang_id, noise=None):
@@ -98,6 +124,9 @@ class TransformerEncoder(nn.Module):
 
         embed_tokens = self.embeddings[lang_id]
 
+        if noise == 0: # only add neighbor noise to reconstruction
+            neighbored_tokens = self.neighbor_noise(src_tokens, lang_id)
+            src_tokens = neighbored_tokens
         # compute padding mask
         encoder_padding_mask = src_tokens.t().eq(self.padding_idx)
         # embed tokens
@@ -105,7 +134,8 @@ class TransformerEncoder(nn.Module):
         x = x.detach() if self.freeze_enc_emb else x
 
         # add embedding noise
-        x = embedding_noise(x, encoder_padding_mask, self.embed_noise_alpha)
+        if noise == 0: # only add embedding noise to reconstruction
+            x = embedding_noise(x, encoder_padding_mask, self.embed_noise_alpha)
 
         # embed positions
         x += self.embed_positions(src_tokens)
