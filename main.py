@@ -249,6 +249,10 @@ parser.add_argument("--embed_noise_alpha", type=float, default=0,
                     help="Alpha for embeddng noise")
 parser.add_argument("--word_duplicate", type=float, default=0,
                     help="Randomly duplicate input words (0 to disable)")
+parser.add_argument("--word_neighbor", type=float, default=0.3,
+                    help="Probability to replace word with neighboring word")
+parser.add_argument("--word_neighbor_dist", type=int, default=5,
+                    help="Maximum distance from the original word (i.e. N neighbors away).")
 
 # Paraphrase params
 parser.add_argument("--paraphrase_dataset", type=str, default="",
