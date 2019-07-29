@@ -79,12 +79,16 @@ def cossim(ref_corpus, hyp_corpus):
     return cossims
 
 
-def write_ses_score():
+def write_ses_score(sys_score):
     # subm_folder = '%s/u2/metrics/wmt14-metrics-task/submissions/SES/' % os.environ['HOME']
     subm_folder = '%s/u2/metrics/wmt18-metrics-task-package/final-metric-scores/submissions-processed/' % os.environ['HOME']
     if not os.path.isdir(subm_folder):
         os.mkdir(subm_folder)
-    f = open(os.path.join(subm_folder,'ses.seg.score'), 'w')
+
+    if sys_score:
+        f = open(os.path.join(subm_folder, 'ses.sys.score'), 'w')
+    else:
+        f = open(os.path.join(subm_folder, 'ses.seg.score'), 'w')
     
 
     metric_name = "SES"
@@ -104,19 +108,29 @@ def write_ses_score():
             hyp_info = os.path.basename(hyp_path).split('.')
             system_name = '.'.join(hyp_info[0:-2])
 
+
             cossims = cossim(ref_path, hyp_path)
-            for i in range(len(cossims)):
-                f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), str(cossims[i]), 'non-emsemble', 'yes' + '\n']))
+            if sys_score:
+                avg_cossim = np.mean(cossims)
+                f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(avg_cossim), 'non-emsemble', 'yes' + '\n']))
+            else: 
+                for i in range(len(cossims)):
+                    f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), str(cossims[i]), 'non-emsemble', 'yes' + '\n']))
 
     f.close()
 
-def write_ses_bleu_score():
+def write_ses_bleu_score(sys_score):
     # subm_folder = '%s/u2/metrics/wmt14-metrics-task/submissions/SES/' % os.environ['HOME']
     subm_folder = '%s/u2/metrics/wmt18-metrics-task-package/final-metric-scores/submissions-processed/' % os.environ['HOME']
     if not os.path.isdir(subm_folder):
         os.mkdir(subm_folder)
-    f = open(os.path.join(subm_folder,'ses_chrf.seg.score'), 'w')
-    
+
+
+    if sys_score:
+        f = open(os.path.join(subm_folder, 'ses_chrf.sys.score'), 'w')
+    else:
+        f = open(os.path.join(subm_folder, 'ses_chrf.seg.score'), 'w')
+        
 
     metric_name = "SES_CHRF"
     test_set = "newstest2018"
@@ -147,8 +161,12 @@ def write_ses_bleu_score():
             bleus = chrf(ref_lines, hyp_lines)
 
             cossims = cossim(ref_path, hyp_path)
-            for i in range(len(cossims)):
-                f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), str((cossims[i]+bleus[i])/2.0), 'non-emsemble', 'yes' + '\n']))
+            if sys_score:
+                avg_score = (np.mean(cossims) + np.mean(bleus)) / 2.0
+                f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(avg_score), 'non-emsemble', 'yes' + '\n']))
+            else:
+                for i in range(len(cossims)):
+                    f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), str((cossims[i]+bleus[i])/2.0), 'non-emsemble', 'yes' + '\n']))
 
     f.close()
 
@@ -237,6 +255,8 @@ parser.add_argument("--write_ses", action="store_true",
                     help="Write ses to file (for WMT)")
 parser.add_argument("--write_ses_bleu", action="store_true",
                     help="Write ses+bleu to file (for WMT)")
+parser.add_argument("--sys_score", action="store_true",
+                    help="Get system-level score (default is segment-level)")
 parser.add_argument("--exp_name", type=str, default="",
                     help="Experiment name")
 parser.add_argument("--exp_id", type=str, default="",
@@ -249,15 +269,17 @@ params = parser.parse_args()
 
 
 if __name__ == "__main__":
+
+
     if params.encode_refs:
         encode_refs(os.listdir(ref_folder))
-    elif params.encode_hyps:
+    if params.encode_hyps:
         encode_hyps(os.listdir(hyp_folder))
-    elif params.write_ses:
-        write_ses_score()
-    elif params.write_ses_bleu:
-        write_ses_bleu_score()
-    else:
+    if params.write_ses:
+        write_ses_score(params.sys_score)
+    if params.write_ses_bleu:
+        write_ses_bleu_score(params.sys_score)
+    if params.exp_name is not "":
         calc_ses(params.exp_name, params.exp_id, params.hyp_num)
 
 
