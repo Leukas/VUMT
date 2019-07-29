@@ -5,6 +5,7 @@ import numpy as np
 import scipy.spatial.distance as dist
 import argparse
 from nltk.translate.bleu_score import sentence_bleu
+from nltk.translate.chrf_score import sentence_chrf
 # import source.embed as embed
 
 # ref_folder = '%s/u2/metrics/wmt14-data/txt/references/' % os.environ['HOME']
@@ -53,7 +54,7 @@ def encode_hyps(hyp_files):
 
         lang_subfolder = os.path.join(hyp_folder, lang_pair)
         for system_file in os.listdir(lang_subfolder): # something like: newstest2014.cu-moses.3383.cs-en
-            system_name = '.'.join(system_file.split('.')[1:3]) # cu-moses.3383
+            system_name = '.'.join(system_file.split('.')[1:-1]) # cu-moses.3383
             input_file = os.path.join(lang_subfolder, system_file)
             output_file = os.path.join(output_folder, 'system-outputs', lang_pair, '%s.%s.%s' % (system_name, lang_pair, ref_lang))
             embed(input_file, ref_lang, output_file)
@@ -101,7 +102,7 @@ def write_ses_score():
             hyp_path = os.path.join(enc_hyp_folder, hyp_file)
 
             hyp_info = os.path.basename(hyp_path).split('.')
-            system_name = '.'.join(hyp_info[0:2])
+            system_name = '.'.join(hyp_info[0:-2])
 
             cossims = cossim(ref_path, hyp_path)
             for i in range(len(cossims)):
@@ -114,10 +115,10 @@ def write_ses_bleu_score():
     subm_folder = '%s/u2/metrics/wmt18-metrics-task-package/final-metric-scores/submissions-processed/' % os.environ['HOME']
     if not os.path.isdir(subm_folder):
         os.mkdir(subm_folder)
-    f = open(os.path.join(subm_folder,'ses_bleu.seg.score'), 'w')
+    f = open(os.path.join(subm_folder,'ses_chrf.seg.score'), 'w')
     
 
-    metric_name = "SES_BLEU"
+    metric_name = "SES_CHRF"
     test_set = "newstest2018"
 
     enc_ref_folder = os.path.join(output_folder, 'references')
@@ -134,16 +135,16 @@ def write_ses_bleu_score():
             hyp_path = os.path.join(enc_hyp_folder, hyp_file)
 
             hyp_info = os.path.basename(hyp_path).split('.')
-            system_name = '.'.join(hyp_info[0:2])
+            system_name = '.'.join(hyp_info[0:-2])
 
-            bleu_hyp_file = os.path.join(hyp_folder, lang_pair, '-'.join([system_name, lang_pair[:2]+lang_pair[3:], 'ref.'+lang_pair[3:]]))
+            bleu_hyp_file = os.path.join(hyp_folder, lang_pair, '.'.join([test_set, system_name, lang_pair]))
             
             with open(bleu_ref_file, 'r') as rf:
                 ref_lines = rf.readlines()
             with open(bleu_hyp_file, 'r') as hf:
                 hyp_lines = hf.readlines()
             
-            bleus = bleu(ref_lines, hyp_lines)
+            bleus = chrf(ref_lines, hyp_lines)
 
             cossims = cossim(ref_path, hyp_path)
             for i in range(len(cossims)):
@@ -161,6 +162,16 @@ def bleu(ref_lines, hyp_lines):
         bleus[i] = sentence_bleu([refs],hyp)
 
     return bleus
+
+def chrf(ref_lines, hyp_lines):
+    """ sentence-level chrf, for comparison with ses"""
+    chrfs = np.zeros(len(ref_lines))
+    for i in range(len(ref_lines)):
+        refs = ref_lines[i].strip().lower().split(' ')
+        hyp = hyp_lines[i].strip().lower().split(' ')
+        chrfs[i] = sentence_chrf(refs,hyp)
+
+    return chrfs
 
 def calc_ses(exp_name, exp_id, hyp_num):
     # if not os.isdir('../encodings/'):
