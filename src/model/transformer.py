@@ -27,6 +27,8 @@ logger = getLogger()
 
 def embedding_noise(emb, emb_mask, alpha=0.5):
     """ Embedding noise based on batch standard deviation """
+    if alpha == 0:
+        return emb
     real_word_embs = emb[1-emb_mask.t()]
     stds = real_word_embs.std(dim=0).to(emb.device)
     mags = torch.randn(real_word_embs.size()).to(emb.device)
@@ -99,10 +101,17 @@ class TransformerEncoder(nn.Module):
         sen_len = src_tokens.size(0)
         batch_size = src_tokens.size(1)
 
-        embed_tokens = self.embeddings[lang_id] # weight: vocab_size x emb_dim
+        embed_tokens = self.embeddings[lang_id] # emb.weight: vocab_size x emb_dim
         src_emb = embed_tokens(src_tokens) # len x batch x emb_dim
-        src_emb = src_emb.view(-1, src_emb.size(2))
+        src_emb = src_emb.view(-1, src_emb.size(2)) # (len x batch) x emb_dim
         sims = src_emb @ embed_tokens.weight.t() # (len x batch) x vocab_size
+
+        # normalize similarities
+        emb_sums = torch.clamp(torch.sqrt(torch.sum(embed_tokens.weight**2, dim=1)), min=1e-8) # vocab_size
+        sims = sims / emb_sums
+        src_sums = torch.clamp(torch.sqrt(torch.sum(src_emb**2, dim=1)), min=1e-8) # (len x batch)
+        sims = (sims.t() / src_sums).t()
+
         sims = sims.view(sen_len, batch_size, -1) # len x batch x vocab_size
 
         neighbors = torch.topk(sims, dim=2, k=self.word_neighbor_dist+1)[1] # len x batch x k-neighbors (+1 to ignore same word)
@@ -162,6 +171,7 @@ class TransformerEncoder(nn.Module):
                 noise = torch.zeros(x_std.size()[1:])
             elif isinstance(noise, float): # noise with specified magnitude
                 #noise_mag = noise/20.0
+                noise_mag = noise
                 noise = torch.randn(x_std.size()[1:])
                 # noise = torch.randn(1)*torch.ones(x_std.size()[1:])*noise_mag
                 cur_mag = torch.norm(noise, dim=1)
