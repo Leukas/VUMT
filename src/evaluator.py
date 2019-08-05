@@ -59,7 +59,7 @@ class EvaluatorMT(object):
             i = 0 if pair[0] == lang else 1
         else:
             i = None
-        dataset.batch_size = 32
+        dataset.batch_size = self.params.batch_size
         for batch in dataset.get_iterator(shuffle=False, group_by_size=True)():
             yield batch if i is None else batch[i]
 
@@ -74,7 +74,7 @@ class EvaluatorMT(object):
         else:
             k = (lang1, lang2) if lang1 < lang2 else (lang2, lang1)
             dataset = self.data['para'][k][data_type]
-            dataset.batch_size = 32
+            dataset.batch_size = self.params.batch_size
             for batch in dataset.get_iterator(shuffle=False, group_by_size=True)():
                 yield batch if lang1 < lang2 else batch[::-1]
 
@@ -85,7 +85,7 @@ class EvaluatorMT(object):
         assert data_type in ['test_real', 'test_fake']
 
         dataset = self.data['paraphrase'][lang][data_type]
-        dataset.batch_size = 32
+        dataset.batch_size = self.params.batch_size
         for batch in dataset.get_iterator(shuffle=False, group_by_size=True)():
             yield batch
 
@@ -262,6 +262,80 @@ class EvaluatorMT(object):
         # update scores
         scores['ppl_%s_%s_%s_%s' % (lang1, lang2, lang3, data_type)] = np.exp(xe_loss / count)
         scores['bleu_%s_%s_%s_%s' % (lang1, lang2, lang3, data_type)] = bleu
+
+    def eval_translation_recog(self, lang1, lang2, data_type, scores):
+        """
+        Evaluate translation recognition, which involves
+        1. Computing cosine similarities on src ref to tgt ref
+        2. Computing cosine similarities on src ref to wrong tgt ref (i.e. fake ref)
+        3. Computing a decision criterion and separability score
+        """
+        logger.info("Evaluating %s -> %s translation recognition (%s) ..." % (lang1, lang2, data_type))
+        self.encoder.eval()
+        self.decoder.eval()
+        params = self.params
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2]
+
+        real_sims = torch.Tensor().cuda()
+        fake_sims = torch.Tensor().cuda()
+        for batch in self.get_iterator(data_type, lang1, lang2):
+
+            # batch
+            (sent1, len1), (sent2, len2) = batch
+            sent1, sent2 = sent1.cuda(), sent2.cuda()
+
+            # encode / decode / generate
+            encoded1 = self.encoder(sent1, len1, lang1_id, noise=0)
+            encoded2 = self.encoder(sent2, len2, lang2_id, noise=0)
+
+            real_ref = encoded2.dis_input
+            fake_ref = torch.cat((real_ref[:, 1:], real_ref[:, 0].unsqueeze(1)), dim=1)
+
+            real_sim = cosine_sim(encoded1.dis_input, real_ref)
+            fake_sim = cosine_sim(encoded1.dis_input, fake_ref)
+            real_sims = torch.cat((real_sims, real_sim))
+            fake_sims = torch.cat((fake_sims, fake_sim))
+
+        real_mean_cos_sim = real_sims.mean(dim=0).item()
+        real_std_cos_sim = real_sims.std(dim=0).item()
+        logger.info("REAL_MEAN_COS_SIM : %f" % (real_mean_cos_sim))
+        logger.info("REAL_STD_COS_SIM : %f" % (real_std_cos_sim))
+        fake_mean_cos_sim = fake_sims.mean(dim=0).item()
+        fake_std_cos_sim = fake_sims.std(dim=0).item()
+        logger.info("FAKE_MEAN_COS_SIM : %f" % (fake_mean_cos_sim))
+        logger.info("FAKE_STD_COS_SIM : %f" % (fake_std_cos_sim))
+
+        if real_mean_cos_sim < fake_mean_cos_sim:
+            sc = sim_score(real_mean_cos_sim, real_std_cos_sim, fake_mean_cos_sim, fake_std_cos_sim)
+        else:
+            sc = sim_score(fake_mean_cos_sim, fake_std_cos_sim, real_mean_cos_sim, real_std_cos_sim)
+
+        logger.info("T_SIM_SCORE: %f" % (sc))
+
+        # update scores
+        # scores['meancossim_%s_%s' % (lang, 'real')] = real_mean_cos_sim
+        # scores['stdcossim_%s_%s' % (lang, 'real')] = real_std_cos_sim
+
+        # if scores['meancossim_%s_%s' % (lang, 'test_real')] < scores['meancossim_%s_%s' % (lang, 'test_fake')]:
+        #     # this really should never happen except for maybe early in training...
+        #     sc = sim_score(
+        #         scores['meancossim_%s_%s' % (lang, 'test_fake')],
+        #         scores['stdcossim_%s_%s' % (lang, 'test_fake')],
+        #         scores['meancossim_%s_%s' % (lang, 'test_real')],
+        #         scores['stdcossim_%s_%s' % (lang, 'test_real')])
+        # else:
+        #     sc = sim_score(
+        #         scores['meancossim_%s_%s' % (lang, 'test_fake')],
+        #         scores['stdcossim_%s_%s' % (lang, 'test_fake')],
+        #         scores['meancossim_%s_%s' % (lang, 'test_real')],
+        #         scores['stdcossim_%s_%s' % (lang, 'test_real')])
+
+        #     logger.info("SIM_SCORE: %f" % (sc))
+
+        # # update scores
+        # scores['simscore_%s' % (lang)] = sc
+
 
     def eval_paraphrase_recog(self, lang, scores):
         """
@@ -459,14 +533,16 @@ class EvaluatorMT(object):
 
 
             for lang in self.data['paraphrase'].keys():
-                # print('LANG LANG', lang)
-                # self.multi_sample_eval(lang, lang, 'test_real', scores)
+            #     # print('LANG LANG', lang)
+            #     # self.multi_sample_eval(lang, lang, 'test_real', scores)
                 self.eval_paraphrase_recog(lang, scores)
 
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
+                    self.eval_translation_recog(lang1, lang2, data_type, scores)
+                    self.eval_translation_recog(lang2, lang1, data_type, scores)
                     if self.params.eval_only and self.params.variational:
-                        self.variation_eval(lang1, lang2, data_type, scores)
+                    #     self.variation_eval(lang1, lang2, data_type, scores)
                         self.multi_sample_eval(lang1, lang2, data_type, scores)
                         self.multi_sample_eval(lang2, lang1, data_type, scores)
 
@@ -563,7 +639,7 @@ class EvaluatorMT(object):
                 # if i == 0: # first eval always the "most likely output"
                 #     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
                 # else:
-                encoded = self.encoder(sent1, len1, lang1_id, noise=5.0*i)
+                encoded = self.encoder(sent1, len1, lang1_id)
                 sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
 
                 txt.extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
@@ -572,6 +648,10 @@ class EvaluatorMT(object):
                     tgt_txt.extend(restore_segmentation(convert_to_text(sent2, len2, self.dico[lang2], lang2_id, self.params)))
 
             hyp_txts.append(txt)
+
+        for i, hyp_txt in enumerate(hyp_txts):
+            bleui = eval_nltk_bleu(tgt_txt, hyp_txt)
+            logger.info("BLEU #%d: %f" % (i, bleui))
 
         final_hyp_txt = choose_sentences(hyp_txts, 'best', self.params, tgt_txt=tgt_txt)
 
@@ -718,7 +798,7 @@ def pinc_score(src_sen, can_sen, max_ngram=4):
         src_ngrams[n] = [src_sen[i:i+n+1] for i in range(len(src_sen)-n)]
 
     ngram_counts = np.zeros(max_ngram)
-    ngram_totals = np.array([len(can_sen) - i + 1 for i in range(1, max_ngram+1)])
+    ngram_totals = np.array([max(len(can_sen) - i + 1, 1) for i in range(1, max_ngram+1)])
 
     for n in range(max_ngram):
         for i in range(ngram_totals[n]):
