@@ -396,7 +396,8 @@ class EvaluatorMT(object):
         """
         dataset = load_custom_data(filepath, input_lang, self.params, self.data)
         input_lang_id = self.params.lang2id[input_lang]
-        imd_lang_id = self.params.lang2id[imd_lang]
+        if imd_lang is not None:
+           imd_lang_id = self.params.lang2id[imd_lang]
         output_lang_id = self.params.lang2id[output_lang]
         self.encoder.eval()
         self.decoder.eval()
@@ -407,19 +408,28 @@ class EvaluatorMT(object):
             for batch in dataset.get_iterator(shuffle=False)():
                 (sent1, len1) = batch
                 sent1 = sent1.cuda()
-                encoded = self.encoder(sent1, len1, input_lang_id, noise=0)
-                sent2_, len2_, _ = self.decoder.generate(encoded, imd_lang_id)
+                
+                if imd_lang is None:
+                    encoded = self.encoder(sent1, len1, input_lang_id, noise=i*10.0+50)
+                    sent3_, len3_, _ = self.decoder.generate(encoded, output_lang_id)
 
-                # encode / decode / generate lang2 -> lang3
-                encoded = self.encoder(sent2_.cuda(), len2_, imd_lang_id, noise=i*10.0+10)
-                sent3_, len3_, _ = self.decoder.generate(encoded, output_lang_id)
+                else:
+                    encoded = self.encoder(sent1, len1, input_lang_id, noise=0)
+                    sent2_, len2_, _ = self.decoder.generate(encoded, imd_lang_id)
+
+                    # encode / decode / generate lang2 -> lang3
+                    encoded = self.encoder(sent2_.cuda(), len2_, imd_lang_id, noise=i*10.0+50)
+                    sent3_, len3_, _ = self.decoder.generate(encoded, output_lang_id)
 
 
                 # txt.extend(convert_to_text(sent2_, len2_, self.dico[output_lang], output_lang_id, self.params))
                 txt.extend(convert_to_text(sent3_, len3_, self.dico[output_lang], output_lang_id, self.params))
 
             # hypothesis / reference paths
-            hyp_name = 'cust{0}.{1}-{2}-{3}.txt'.format(i*10.0+10, input_lang, imd_lang, output_lang)
+            if imd_lang is None:
+                hyp_name = 'cust{0}.{1}-{2}.txt'.format(i*10.0+10, input_lang, output_lang)
+            else: 
+                hyp_name = 'cust{0}.{1}-{2}-{3}.txt'.format(i*10.0+10, input_lang, imd_lang, output_lang)
             hyp_path = os.path.join(self.params.dump_path, hyp_name)
 
             # export sentences to hypothesis file / restore BPE segmentation
@@ -454,8 +464,10 @@ class EvaluatorMT(object):
         scores = OrderedDict({'epoch': epoch})
 
         with torch.no_grad():
-            # filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
-            # self.custom_eval(filepath, 'en','fr', 'en', scores)
+            if self.params.eval_only:
+               filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
+               self.custom_eval(filepath, 'en', None, 'en', scores)
+               self.custom_eval(filepath, 'en','fr', 'en', scores)
 
 
             for lang in self.data['paraphrase'].keys():
@@ -563,7 +575,7 @@ class EvaluatorMT(object):
                 # if i == 0: # first eval always the "most likely output"
                 #     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
                 # else:
-                encoded = self.encoder(sent1, len1, lang1_id, noise=5.0*i)
+                encoded = self.encoder(sent1, len1, lang1_id, noise=10.0*i)
                 sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
 
                 txt.extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
@@ -618,7 +630,7 @@ class EvaluatorMT(object):
                 # if i == 0: # first eval always the "most likely output"
                 #     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
                 # else:
-                encoded = self.encoder(sent1, len1, lang1_id, noise=10.0*i)
+                encoded = self.encoder(sent1, len1, lang1_id, noise=20.0*i)
                 sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
 
                 txt.extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
@@ -773,7 +785,7 @@ def choose_sentences(texts, method, params, tgt_txt=None):
             best_bleu = 0
             best_bleu_idx = 0
             for j in range(params.eval_samples):
-                b = sentence_bleu(tgt_txt[i].split(), texts[j][i].split())
+                b = sentence_bleu([tgt_txt[i].split()], texts[j][i].split())
                 if b > best_bleu:
                     best_bleu = b
                     best_bleu_idx = j
