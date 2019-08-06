@@ -133,7 +133,7 @@ class TransformerEncoder(nn.Module):
 
         embed_tokens = self.embeddings[lang_id]
 
-        if noise is 0: # only add neighbor noise to reconstruction
+        if noise is 0 and self.training: # only add neighbor noise to reconstruction
             neighbored_tokens = self.neighbor_noise(src_tokens, lang_id)
             src_tokens = neighbored_tokens
         # compute padding mask
@@ -143,7 +143,7 @@ class TransformerEncoder(nn.Module):
         x = x.detach() if self.freeze_enc_emb else x
 
         # add embedding noise
-        if noise is 0: # only add embedding noise to reconstruction
+        if noise is 0 and self.training: # only add embedding noise to reconstruction
             x = embedding_noise(x, encoder_padding_mask, self.embed_noise_alpha)
 
         # embed positions
@@ -165,7 +165,7 @@ class TransformerEncoder(nn.Module):
                 # noise = torch.randn_like(x_std)
                 noise = torch.randn(x_std.size()[1:])
                 #noise = torch.randn(1)*torch.ones(x_std.size()[1:])
-                noise *= self.sample_dist
+                # noise *= self.sample_dist
             elif noise is 0: # no noise (i.e. magnitude 0)
                 # noise = torch.zeros_like(x_std)
                 noise = torch.zeros(x_std.size()[1:])
