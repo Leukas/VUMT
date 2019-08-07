@@ -538,21 +538,21 @@ class EvaluatorMT(object):
         scores = OrderedDict({'epoch': epoch})
 
         with torch.no_grad():
-            if self.params.eval_only:
-               filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
-               self.custom_eval(filepath, 'en', None, 'en', scores)
-               self.custom_eval(filepath, 'en','fr', 'en', scores)
+            # if self.params.eval_only:
+            #    filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
+            #    self.custom_eval(filepath, 'en', None, 'en', scores)
+            #    self.custom_eval(filepath, 'en','fr', 'en', scores)
 
 
-            for lang in self.data['paraphrase'].keys():
-            #     # print('LANG LANG', lang)
-            #     # self.multi_sample_eval(lang, lang, 'test_real', scores)
-                self.eval_paraphrase_recog(lang, scores)
+            # for lang in self.data['paraphrase'].keys():
+            # #     # print('LANG LANG', lang)
+            # #     # self.multi_sample_eval(lang, lang, 'test_real', scores)
+            #     self.eval_paraphrase_recog(lang, scores)
 
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
-                    self.eval_translation_recog(lang1, lang2, data_type, scores)
-                    self.eval_translation_recog(lang2, lang1, data_type, scores)
+                    # self.eval_translation_recog(lang1, lang2, data_type, scores)
+                    # self.eval_translation_recog(lang2, lang1, data_type, scores)
                     if self.params.eval_only and self.params.variational:
                     #     self.variation_eval(lang1, lang2, data_type, scores)
                         self.multi_sample_eval(lang1, lang2, data_type, scores)
@@ -652,7 +652,7 @@ class EvaluatorMT(object):
                 #     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
                 # else:
                 encoded = self.encoder(sent1, len1, lang1_id)
-                sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
+                sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id, max_len=1.5*max(len1))
 
                 txt.extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
                 if i == 0:
