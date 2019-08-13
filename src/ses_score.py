@@ -1,4 +1,5 @@
 import os
+import glob
 os.environ["LASER"]="%s/u2/tools/LASER/" % os.environ['HOME']
 import subprocess
 import numpy as np
@@ -21,7 +22,7 @@ def embed(input_file, lang, output_file):
     BPE_CODES = os.environ['LASER']+'models/93langs.fcodes'
     EMBEDDER = 'python3 '+os.environ['LASER']+'source/embed.py '
     command = EMBEDDER + '< %s --encoder %s --token-lang %s --bpe-codes %s --output %s --verbose'
-    p = subprocess.call(command % (input_file, ENCODER, lang, BPE_CODES, output_file), shell=True)
+    subprocess.call(command % (input_file, ENCODER, lang, BPE_CODES, output_file), shell=True)
     # result = p.communicate()[0].decode("utf-8")
     # print(result)
 
@@ -192,6 +193,7 @@ def chrf(ref_lines, hyp_lines):
     return chrfs
 
 def calc_ses(exp_name, exp_id, hyp_num):
+
     # if not os.isdir('../encodings/'):
     #     os.mkdir('../encodings/')
     dump_path = os.path.join('../dumped/', exp_name, exp_id)
@@ -280,7 +282,11 @@ if __name__ == "__main__":
     if params.write_ses_bleu:
         write_ses_bleu_score(params.sys_score)
     if params.exp_name is not "":
-        calc_ses(params.exp_name, params.exp_id, params.hyp_num)
+        if params.hyp_num is "all":
+            for i in range(len(glob.glob('hyp*.fr-en.test.txt'))):
+                calc_ses(params.exp_name, params.exp_id, str(i))          
+        else:
+            calc_ses(params.exp_name, params.exp_id, params.hyp_num)
 
 
 # def tokenize(filepath, lang):
