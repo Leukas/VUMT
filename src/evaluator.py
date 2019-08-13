@@ -544,15 +544,15 @@ class EvaluatorMT(object):
             #    self.custom_eval(filepath, 'en','fr', 'en', scores)
 
 
-            # for lang in self.data['paraphrase'].keys():
+            for lang in self.data['paraphrase'].keys():
             # #     # print('LANG LANG', lang)
             # #     # self.multi_sample_eval(lang, lang, 'test_real', scores)
-            #     self.eval_paraphrase_recog(lang, scores)
+                self.eval_paraphrase_recog(lang, scores)
 
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
-                    # self.eval_translation_recog(lang1, lang2, data_type, scores)
-                    # self.eval_translation_recog(lang2, lang1, data_type, scores)
+                    self.eval_translation_recog(lang1, lang2, data_type, scores)
+                    self.eval_translation_recog(lang2, lang1, data_type, scores)
                     if self.params.eval_only and self.params.variational:
                     #     self.variation_eval(lang1, lang2, data_type, scores)
                         self.multi_sample_eval(lang1, lang2, data_type, scores)
@@ -648,11 +648,11 @@ class EvaluatorMT(object):
                 sent1, sent2 = sent1.cuda(), sent2.cuda()
 
                 # encode / decode / generate
-                # if i == 0: # first eval always the "most likely output"
-                #     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
-                # else:
-                encoded = self.encoder(sent1, len1, lang1_id)
-                sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id, max_len=1.5*max(len1))
+                if i == 0: # first eval always the "most likely output"
+                    encoded = self.encoder(sent1, len1, lang1_id, noise=0)
+                else:
+                    encoded = self.encoder(sent1, len1, lang1_id, noise=i*5.0)
+                sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id, max_len=5*max(len1))
 
                 txt.extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
                 if i == 0:
@@ -664,6 +664,9 @@ class EvaluatorMT(object):
         for i, hyp_txt in enumerate(hyp_txts):
             bleui = eval_nltk_bleu(tgt_txt, hyp_txt)
             logger.info("BLEU #%d: %f" % (i, bleui))
+            hyp_path = os.path.join(params.dump_path, 'multi{0}.{1}-{2}.txt'.format(i, lang1, lang2))
+            with open(hyp_path,'w', encoding='utf-8') as f:
+                f.write('\n'.join(txt)+'\n')
 
         final_hyp_txt = choose_sentences(hyp_txts, 'best', self.params, tgt_txt=tgt_txt)
 
