@@ -338,8 +338,6 @@ class EvaluatorMT(object):
 
         # # update scores
         # scores['simscore_%s' % (lang)] = sc
-
-
     def eval_paraphrase_recog(self, lang, scores):
         """
         Evaluate lang paraphrase recognition, which involves
@@ -347,59 +345,114 @@ class EvaluatorMT(object):
         2. Computing cosine similarities on fake paraphrases
         3. Computing a decision criterion and separability score
         """
-        for data_type in ['test_real', 'test_fake']:
-            logger.info("Evaluating %s paraphrase (%s) ..." % (lang, data_type))
-            self.encoder.eval()
-            self.decoder.eval()
-            params = self.params
-            lang_id = params.lang2id[lang]
+        logger.info("Evaluating %s paraphrase ..." % (lang))
+        self.encoder.eval()
+        self.decoder.eval()
+        params = self.params
+        lang_id = params.lang2id[lang]
 
-            # hypothesis
-            txt = []
+        # hypothesis
+        txt = []
 
-            all_sim = 0 
-            n_sents = 0
-            sims = torch.Tensor().cuda()
-            for batch in self.get_paraphrase_iterator(data_type, lang):
+        all_sim = 0 
+        n_sents = 0
+        sims = torch.Tensor().cuda()
+        for batch in self.get_paraphrase_iterator('test_real', lang):
+            # batch
+            (sent1, len1), (sent2, len2) = batch
+            sent1, sent2 = sent1.cuda(), sent2.cuda()
 
-                # batch
-                (sent1, len1), (sent2, len2) = batch
-                sent1, sent2 = sent1.cuda(), sent2.cuda()
+            # encode / decode / generate
+            encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
+            encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
 
-                # encode / decode / generate
-                encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
-                encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
+            real_ref = encoded2.dis_input
+            fake_ref = torch.cat((real_ref[:, 1:], real_ref[:, 0].unsqueeze(1)), dim=1)
 
-                sim = cosine_sim(encoded1.dis_input, encoded2.dis_input)
-                sims = torch.cat((sims, sim))
+            real_sim = cosine_sim(encoded1.dis_input, real_ref)
+            fake_sim = cosine_sim(encoded1.dis_input, fake_ref)
+            real_sims = torch.cat((real_sims, real_sim))
+            fake_sims = torch.cat((fake_sims, fake_sim))
 
-            mean_cos_sim = sims.mean(dim=0).item()
-            std_cos_sim = sims.std(dim=0).item()
-            logger.info("MEAN_COS_SIM : %f" % (mean_cos_sim))
-            logger.info("STD_COS_SIM : %f" % (std_cos_sim))
+        real_mean_cos_sim = real_sims.mean(dim=0).item()
+        real_std_cos_sim = real_sims.std(dim=0).item()
+        logger.info("REAL_MEAN_COS_SIM : %f" % (real_mean_cos_sim))
+        logger.info("REAL_STD_COS_SIM : %f" % (real_std_cos_sim))
+        fake_mean_cos_sim = fake_sims.mean(dim=0).item()
+        fake_std_cos_sim = fake_sims.std(dim=0).item()
+        logger.info("FAKE_MEAN_COS_SIM : %f" % (fake_mean_cos_sim))
+        logger.info("FAKE_STD_COS_SIM : %f" % (fake_std_cos_sim))
 
-            # update scores
-            scores['meancossim_%s_%s' % (lang, data_type)] = mean_cos_sim
-            scores['stdcossim_%s_%s' % (lang, data_type)] = std_cos_sim
-
-        if scores['meancossim_%s_%s' % (lang, 'test_real')] < scores['meancossim_%s_%s' % (lang, 'test_fake')]:
-            # this really should never happen except for maybe early in training...
-            sc = sim_score(
-                scores['meancossim_%s_%s' % (lang, 'test_fake')],
-                scores['stdcossim_%s_%s' % (lang, 'test_fake')],
-                scores['meancossim_%s_%s' % (lang, 'test_real')],
-                scores['stdcossim_%s_%s' % (lang, 'test_real')])
+        if real_mean_cos_sim < fake_mean_cos_sim:
+            sc = sim_score(real_mean_cos_sim, real_std_cos_sim, fake_mean_cos_sim, fake_std_cos_sim)
         else:
-            sc = sim_score(
-                scores['meancossim_%s_%s' % (lang, 'test_fake')],
-                scores['stdcossim_%s_%s' % (lang, 'test_fake')],
-                scores['meancossim_%s_%s' % (lang, 'test_real')],
-                scores['stdcossim_%s_%s' % (lang, 'test_real')])
+            sc = sim_score(fake_mean_cos_sim, fake_std_cos_sim, real_mean_cos_sim, real_std_cos_sim)
 
-        logger.info("SIM_SCORE: %f" % (sc))
+        sc2 = real_sim_score(fake_sims, real_sims)
 
-        # update scores
-        scores['simscore_%s' % (lang)] = sc
+        logger.info("P_SIM_SCORE: %f" % (sc))
+        logger.info("RP_SIM_SCORE: %f" % (sc2))
+
+    # def eval_paraphrase_recog(self, lang, scores):
+    #     """
+    #     Evaluate lang paraphrase recognition, which involves
+    #     1. Computing cosine similarities on real paraphrases
+    #     2. Computing cosine similarities on fake paraphrases
+    #     3. Computing a decision criterion and separability score
+    #     """
+    #     for data_type in ['test_real', 'test_fake']:
+    #         logger.info("Evaluating %s paraphrase (%s) ..." % (lang, data_type))
+    #         self.encoder.eval()
+    #         self.decoder.eval()
+    #         params = self.params
+    #         lang_id = params.lang2id[lang]
+
+    #         # hypothesis
+    #         txt = []
+
+    #         all_sim = 0 
+    #         n_sents = 0
+    #         sims = torch.Tensor().cuda()
+    #         for batch in self.get_paraphrase_iterator(data_type, lang):
+
+    #             # batch
+    #             (sent1, len1), (sent2, len2) = batch
+    #             sent1, sent2 = sent1.cuda(), sent2.cuda()
+
+    #             # encode / decode / generate
+    #             encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
+    #             encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
+
+    #             sim = cosine_sim(encoded1.dis_input, encoded2.dis_input)
+    #             sims = torch.cat((sims, sim))
+
+    #         mean_cos_sim = sims.mean(dim=0).item()
+    #         std_cos_sim = sims.std(dim=0).item()
+    #         logger.info("MEAN_COS_SIM : %f" % (mean_cos_sim))
+    #         logger.info("STD_COS_SIM : %f" % (std_cos_sim))
+
+    #         # update scores
+    #         scores['meancossim_%s_%s' % (lang, data_type)] = mean_cos_sim
+    #         scores['stdcossim_%s_%s' % (lang, data_type)] = std_cos_sim
+
+    #     if scores['meancossim_%s_%s' % (lang, 'test_real')] < scores['meancossim_%s_%s' % (lang, 'test_fake')]:
+    #         # this really should never happen except for maybe early in training...
+    #         sc = sim_score(
+    #             scores['meancossim_%s_%s' % (lang, 'test_fake')],
+    #             scores['stdcossim_%s_%s' % (lang, 'test_fake')],
+    #             scores['meancossim_%s_%s' % (lang, 'test_real')],
+    #             scores['stdcossim_%s_%s' % (lang, 'test_real')])
+    #     else:
+    #         sc = sim_score(
+    #             scores['meancossim_%s_%s' % (lang, 'test_fake')],
+    #             scores['stdcossim_%s_%s' % (lang, 'test_fake')],
+    #             scores['meancossim_%s_%s' % (lang, 'test_real')],
+    #             scores['stdcossim_%s_%s' % (lang, 'test_real')])
+
+    #     logger.info("SIM_SCORE: %f" % (sc))
+
+    #     # update scores
+    #     scores['simscore_%s' % (lang)] = sc
 
     def eval_paraphrase_gen(self, lang, scores):
         """
@@ -547,10 +600,10 @@ class EvaluatorMT(object):
             #    self.custom_eval(filepath, 'en','fr', 'en', scores)
 
 
-            # for lang in self.data['paraphrase'].keys():
-            # #     # print('LANG LANG', lang)
-            # #     # self.multi_sample_eval(lang, lang, 'test_real', scores)
-            #     self.eval_paraphrase_recog(lang, scores)
+            for lang in self.data['paraphrase'].keys():
+            #     # print('LANG LANG', lang)
+            #     # self.multi_sample_eval(lang, lang, 'test_real', scores)
+                self.eval_paraphrase_recog(lang, scores)
 
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
