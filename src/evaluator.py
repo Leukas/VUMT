@@ -311,7 +311,10 @@ class EvaluatorMT(object):
         else:
             sc = sim_score(fake_mean_cos_sim, fake_std_cos_sim, real_mean_cos_sim, real_std_cos_sim)
 
+        sc2 = real_sim_score(fake_sims, real_sims)
+
         logger.info("T_SIM_SCORE: %f" % (sc))
+        logger.info("RT_SIM_SCORE: %f" % (sc2))
 
         # update scores
         # scores['meancossim_%s_%s' % (lang, 'real')] = real_mean_cos_sim
@@ -553,6 +556,7 @@ class EvaluatorMT(object):
                 for data_type in ['valid', 'test']:
                     self.eval_translation_recog(lang1, lang2, data_type, scores)
                     self.eval_translation_recog(lang2, lang1, data_type, scores)
+                    # self.eval_translation_recog(lang2, lang1, data_type, scores)
                     if self.params.eval_only and self.params.variational:
                     #     self.variation_eval(lang1, lang2, data_type, scores)
                         self.multi_sample_eval(lang1, lang2, data_type, scores)
@@ -651,7 +655,7 @@ class EvaluatorMT(object):
                 if i == 0: # first eval always the "most likely output"
                     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
                 else:
-                    encoded = self.encoder(sent1, len1, lang1_id, noise=i*5.0)
+                    encoded = self.encoder(sent1, len1, lang1_id, noise=i*10.0)
                 sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id, max_len=5*max(len1))
 
                 txt.extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
@@ -853,6 +857,29 @@ def sim_score(mu1, sigma1, mu2, sigma2):
 
 
     return norm.cdf(intersect, mu1, sigma1) - norm.cdf(intersect, mu2, sigma2)
+
+def real_sim_score(fake_sims, real_sims):
+    mu1 = fake_sims.mean(dim=0).item()
+    sigma1 = fake_sims.std(dim=0).item()
+    mu2 = real_sims.mean(dim=0).item()
+    sigma2 = real_sims.std(dim=0).item()
+
+    if sigma1 == sigma2:
+        intersect = (mu1 + mu2)/2
+    else:
+        var1 = sigma1**2
+        var2 = sigma2**2
+        var_diff = var1-var2
+        rat = np.sqrt((mu1 - mu2)**2 + 2*var_diff*np.log(sigma1 / sigma2))
+        numer = mu2 * var1 - sigma2 * (mu1 * sigma2 + sigma1 * rat)
+        intersect = numer / var_diff
+
+    correct = ((real_sims >= intersect).sum() + (fake_sims < intersect).sum()).item()
+    total = float(len(real_sims) + len(fake_sims))
+    
+    return correct/total
+    
+
 
 def choose_sentences(texts, method, params, tgt_txt=None):
     """ Choose sentences """
