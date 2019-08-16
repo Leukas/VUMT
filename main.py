@@ -239,7 +239,7 @@ parser.add_argument("--variational", type=bool_flag, default=False,
                     help="Use variational model. Default False")
 parser.add_argument("--lambda_vae", type=str, default="1",
                     help="Variational loss coefficient")
-parser.add_argument("--vae_samples", type=int, default=2,
+parser.add_argument("--vae_samples", type=int, default=1,
                     help="How many times to sample during OTF generation (for VAE)")
 parser.add_argument("--sample_dist", type=float, default=1.0,
                     help="Distance multiplier for VAE sampling.")                  
