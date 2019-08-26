@@ -338,8 +338,6 @@ class EvaluatorMT(object):
 
         # # update scores
         # scores['simscore_%s' % (lang)] = sc
-
-
     def eval_paraphrase_recog(self, lang, scores):
         """
         Evaluate lang paraphrase recognition, which involves
@@ -347,59 +345,113 @@ class EvaluatorMT(object):
         2. Computing cosine similarities on fake paraphrases
         3. Computing a decision criterion and separability score
         """
-        for data_type in ['test_real', 'test_fake']:
-            logger.info("Evaluating %s paraphrase (%s) ..." % (lang, data_type))
-            self.encoder.eval()
-            self.decoder.eval()
-            params = self.params
-            lang_id = params.lang2id[lang]
+        logger.info("Evaluating %s paraphrase ..." % (lang))
+        self.encoder.eval()
+        self.decoder.eval()
+        params = self.params
+        lang_id = params.lang2id[lang]
 
-            # hypothesis
-            txt = []
+        # hypothesis
+        txt = []
 
-            all_sim = 0 
-            n_sents = 0
-            sims = torch.Tensor().cuda()
-            for batch in self.get_paraphrase_iterator(data_type, lang):
+        real_sims = torch.Tensor().cuda()
+        fake_sims = torch.Tensor().cuda()
+        for batch in self.get_paraphrase_iterator('test_real', lang):
+            # batch
+            (sent1, len1), (sent2, len2) = batch
+            sent1, sent2 = sent1.cuda(), sent2.cuda()
 
-                # batch
-                (sent1, len1), (sent2, len2) = batch
-                sent1, sent2 = sent1.cuda(), sent2.cuda()
+            # encode / decode / generate
+            encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
+            encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
 
-                # encode / decode / generate
-                encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
-                encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
+            real_ref = encoded2.dis_input
+            fake_ref = torch.cat((real_ref[:, 1:], real_ref[:, 0].unsqueeze(1)), dim=1)
 
-                sim = cosine_sim(encoded1.dis_input, encoded2.dis_input)
-                sims = torch.cat((sims, sim))
+            real_sim = cosine_sim(encoded1.dis_input, real_ref)
+            fake_sim = cosine_sim(encoded1.dis_input, fake_ref)
+            real_sims = torch.cat((real_sims, real_sim))
+            fake_sims = torch.cat((fake_sims, fake_sim))
 
-            mean_cos_sim = sims.mean(dim=0).item()
-            std_cos_sim = sims.std(dim=0).item()
-            logger.info("MEAN_COS_SIM : %f" % (mean_cos_sim))
-            logger.info("STD_COS_SIM : %f" % (std_cos_sim))
+        real_mean_cos_sim = real_sims.mean(dim=0).item()
+        real_std_cos_sim = real_sims.std(dim=0).item()
+        logger.info("REAL_MEAN_COS_SIM : %f" % (real_mean_cos_sim))
+        logger.info("REAL_STD_COS_SIM : %f" % (real_std_cos_sim))
+        fake_mean_cos_sim = fake_sims.mean(dim=0).item()
+        fake_std_cos_sim = fake_sims.std(dim=0).item()
+        logger.info("FAKE_MEAN_COS_SIM : %f" % (fake_mean_cos_sim))
+        logger.info("FAKE_STD_COS_SIM : %f" % (fake_std_cos_sim))
 
-            # update scores
-            scores['meancossim_%s_%s' % (lang, data_type)] = mean_cos_sim
-            scores['stdcossim_%s_%s' % (lang, data_type)] = std_cos_sim
-
-        if scores['meancossim_%s_%s' % (lang, 'test_real')] < scores['meancossim_%s_%s' % (lang, 'test_fake')]:
-            # this really should never happen except for maybe early in training...
-            sc = sim_score(
-                scores['meancossim_%s_%s' % (lang, 'test_fake')],
-                scores['stdcossim_%s_%s' % (lang, 'test_fake')],
-                scores['meancossim_%s_%s' % (lang, 'test_real')],
-                scores['stdcossim_%s_%s' % (lang, 'test_real')])
+        if real_mean_cos_sim < fake_mean_cos_sim:
+            sc = sim_score(real_mean_cos_sim, real_std_cos_sim, fake_mean_cos_sim, fake_std_cos_sim)
         else:
-            sc = sim_score(
-                scores['meancossim_%s_%s' % (lang, 'test_fake')],
-                scores['stdcossim_%s_%s' % (lang, 'test_fake')],
-                scores['meancossim_%s_%s' % (lang, 'test_real')],
-                scores['stdcossim_%s_%s' % (lang, 'test_real')])
+            sc = sim_score(fake_mean_cos_sim, fake_std_cos_sim, real_mean_cos_sim, real_std_cos_sim)
 
-        logger.info("SIM_SCORE: %f" % (sc))
+        sc2 = real_sim_score(fake_sims, real_sims)
 
-        # update scores
-        scores['simscore_%s' % (lang)] = sc
+        logger.info("P_SIM_SCORE: %f" % (sc))
+        logger.info("RP_SIM_SCORE: %f" % (sc2))
+
+    # def eval_paraphrase_recog(self, lang, scores):
+    #     """
+    #     Evaluate lang paraphrase recognition, which involves
+    #     1. Computing cosine similarities on real paraphrases
+    #     2. Computing cosine similarities on fake paraphrases
+    #     3. Computing a decision criterion and separability score
+    #     """
+    #     for data_type in ['test_real', 'test_fake']:
+    #         logger.info("Evaluating %s paraphrase (%s) ..." % (lang, data_type))
+    #         self.encoder.eval()
+    #         self.decoder.eval()
+    #         params = self.params
+    #         lang_id = params.lang2id[lang]
+
+    #         # hypothesis
+    #         txt = []
+
+    #         all_sim = 0 
+    #         n_sents = 0
+    #         sims = torch.Tensor().cuda()
+    #         for batch in self.get_paraphrase_iterator(data_type, lang):
+
+    #             # batch
+    #             (sent1, len1), (sent2, len2) = batch
+    #             sent1, sent2 = sent1.cuda(), sent2.cuda()
+
+    #             # encode / decode / generate
+    #             encoded1 = self.encoder(sent1, len1, lang_id, noise=0)
+    #             encoded2 = self.encoder(sent2, len2, lang_id, noise=0)
+
+    #             sim = cosine_sim(encoded1.dis_input, encoded2.dis_input)
+    #             sims = torch.cat((sims, sim))
+
+    #         mean_cos_sim = sims.mean(dim=0).item()
+    #         std_cos_sim = sims.std(dim=0).item()
+    #         logger.info("MEAN_COS_SIM : %f" % (mean_cos_sim))
+    #         logger.info("STD_COS_SIM : %f" % (std_cos_sim))
+
+    #         # update scores
+    #         scores['meancossim_%s_%s' % (lang, data_type)] = mean_cos_sim
+    #         scores['stdcossim_%s_%s' % (lang, data_type)] = std_cos_sim
+
+    #     if scores['meancossim_%s_%s' % (lang, 'test_real')] < scores['meancossim_%s_%s' % (lang, 'test_fake')]:
+    #         # this really should never happen except for maybe early in training...
+    #         sc = sim_score(
+    #             scores['meancossim_%s_%s' % (lang, 'test_fake')],
+    #             scores['stdcossim_%s_%s' % (lang, 'test_fake')],
+    #             scores['meancossim_%s_%s' % (lang, 'test_real')],
+    #             scores['stdcossim_%s_%s' % (lang, 'test_real')])
+    #     else:
+    #         sc = sim_score(
+    #             scores['meancossim_%s_%s' % (lang, 'test_fake')],
+    #             scores['stdcossim_%s_%s' % (lang, 'test_fake')],
+    #             scores['meancossim_%s_%s' % (lang, 'test_real')],
+    #             scores['stdcossim_%s_%s' % (lang, 'test_real')])
+
+    #     logger.info("SIM_SCORE: %f" % (sc))
+
+    #     # update scores
+    #     scores['simscore_%s' % (lang)] = sc
 
     def eval_paraphrase_gen(self, lang, scores):
         """
@@ -480,14 +532,14 @@ class EvaluatorMT(object):
         self.decoder.eval()
 
 
-        for i in range(5):
+        for i in range(10):
             txt = []
             for batch in dataset.get_iterator(shuffle=False)():
                 (sent1, len1) = batch
                 sent1 = sent1.cuda()
                 
                 if imd_lang is None:
-                    encoded = self.encoder(sent1, len1, input_lang_id, noise=i*10.0+50)
+                    encoded = self.encoder(sent1, len1, input_lang_id, noise=i*1.0)
                     sent3_, len3_, _ = self.decoder.generate(encoded, output_lang_id)
 
                 else:
@@ -495,7 +547,7 @@ class EvaluatorMT(object):
                     sent2_, len2_, _ = self.decoder.generate(encoded, imd_lang_id)
 
                     # encode / decode / generate lang2 -> lang3
-                    encoded = self.encoder(sent2_.cuda(), len2_, imd_lang_id, noise=i*10.0+50)
+                    encoded = self.encoder(sent2_.cuda(), len2_, imd_lang_id, noise=i*1.0)
                     sent3_, len3_, _ = self.decoder.generate(encoded, output_lang_id)
 
 
@@ -504,9 +556,9 @@ class EvaluatorMT(object):
 
             # hypothesis / reference paths
             if imd_lang is None:
-                hyp_name = 'cust{0}.{1}-{2}.txt'.format(i*10.0+10, input_lang, output_lang)
+                hyp_name = 'cust{0}.{1}-{2}.txt'.format(i, input_lang, output_lang)
             else: 
-                hyp_name = 'cust{0}.{1}-{2}-{3}.txt'.format(i*10.0+10, input_lang, imd_lang, output_lang)
+                hyp_name = 'cust{0}.{1}-{2}--{3}.txt'.format(i, input_lang, imd_lang, output_lang)
             hyp_path = os.path.join(self.params.dump_path, hyp_name)
 
             # export sentences to hypothesis file / restore BPE segmentation
@@ -541,15 +593,15 @@ class EvaluatorMT(object):
         scores = OrderedDict({'epoch': epoch})
 
         with torch.no_grad():
-            # if self.params.eval_only:
-            #    filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
-            #    self.custom_eval(filepath, 'en', None, 'en', scores)
-            #    self.custom_eval(filepath, 'en','fr', 'en', scores)
+            if self.params.eval_only:
+                filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
+                # self.custom_eval(filepath, 'en', None, 'en', scores)
+                self.custom_eval(filepath, 'en','fr', 'en', scores)
 
 
             for lang in self.data['paraphrase'].keys():
-            # #     # print('LANG LANG', lang)
-            # #     # self.multi_sample_eval(lang, lang, 'test_real', scores)
+            #     # print('LANG LANG', lang)
+            #     # self.multi_sample_eval(lang, lang, 'test_real', scores)
                 self.eval_paraphrase_recog(lang, scores)
 
             for lang1, lang2 in self.data['para'].keys():
@@ -557,10 +609,10 @@ class EvaluatorMT(object):
                     self.eval_translation_recog(lang1, lang2, data_type, scores)
                     self.eval_translation_recog(lang2, lang1, data_type, scores)
                     # self.eval_translation_recog(lang2, lang1, data_type, scores)
-                    if self.params.eval_only and self.params.variational:
+                    #if self.params.eval_only and self.params.variational:
                     #     self.variation_eval(lang1, lang2, data_type, scores)
-                        self.multi_sample_eval(lang1, lang2, data_type, scores)
-                        self.multi_sample_eval(lang2, lang1, data_type, scores)
+                    #    self.multi_sample_eval(lang1, lang2, data_type, scores)
+                    #    self.multi_sample_eval(lang2, lang1, data_type, scores)
 
                     
                     self.eval_para(lang1, lang2, data_type, scores)
@@ -655,7 +707,7 @@ class EvaluatorMT(object):
                 if i == 0: # first eval always the "most likely output"
                     encoded = self.encoder(sent1, len1, lang1_id, noise=0)
                 else:
-                    encoded = self.encoder(sent1, len1, lang1_id, noise=i*10.0)
+                    encoded = self.encoder(sent1, len1, lang1_id, noise=1.0*i)
                 sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id, max_len=5*max(len1))
 
                 txt.extend(restore_segmentation(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params)))
@@ -668,9 +720,9 @@ class EvaluatorMT(object):
         for i, hyp_txt in enumerate(hyp_txts):
             bleui = eval_nltk_bleu(tgt_txt, hyp_txt)
             logger.info("BLEU #%d: %f" % (i, bleui))
-            hyp_path = os.path.join(params.dump_path, 'multi{0}.{1}-{2}.txt'.format(i, lang1, lang2))
+            hyp_path = os.path.join(params.dump_path, 'multic{0}.{1}-{2}.txt'.format(i, lang1, lang2))
             with open(hyp_path,'w', encoding='utf-8') as f:
-                f.write('\n'.join(txt)+'\n')
+                f.write('\n'.join(hyp_txt)+'\n')
 
         final_hyp_txt = choose_sentences(hyp_txts, 'best', self.params, tgt_txt=tgt_txt)
 
