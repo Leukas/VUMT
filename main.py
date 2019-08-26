@@ -239,7 +239,7 @@ parser.add_argument("--variational", type=bool_flag, default=False,
                     help="Use variational model. Default False")
 parser.add_argument("--lambda_vae", type=str, default="1",
                     help="Variational loss coefficient")
-parser.add_argument("--vae_samples", type=int, default=2,
+parser.add_argument("--vae_samples", type=int, default=1,
                     help="How many times to sample during OTF generation (for VAE)")
 parser.add_argument("--sample_dist", type=float, default=1.0,
                     help="Distance multiplier for VAE sampling.")                  
@@ -249,7 +249,7 @@ parser.add_argument("--embed_noise_alpha", type=float, default=0,
                     help="Alpha for embeddng noise")
 parser.add_argument("--word_duplicate", type=float, default=0,
                     help="Randomly duplicate input words (0 to disable)")
-parser.add_argument("--word_neighbor", type=float, default=0.3,
+parser.add_argument("--word_neighbor", type=float, default=0,
                     help="Probability to replace word with neighboring word")
 parser.add_argument("--word_neighbor_dist", type=int, default=5,
                     help="Maximum distance from the original word (i.e. N neighbors away).")
