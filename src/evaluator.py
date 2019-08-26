@@ -12,7 +12,9 @@ from logging import getLogger
 import numpy as np
 import torch
 from torch import nn
-from scipy.stats import norm
+from scipy.stats import norm, sem
+from scipy.stats.t import ppf
+from sklearn.utils import resample
 from .utils import restore_segmentation
 from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
 from src.data.loader import load_custom_data
@@ -316,6 +318,18 @@ class EvaluatorMT(object):
         logger.info("T_SIM_SCORE: %f" % (sc))
         logger.info("RT_SIM_SCORE: %f" % (sc2))
 
+
+        logger.info("Bootstrap-resampled:")
+        scs = np.zeros(100)
+        for i in range(100):
+            fake_sample, real_sample = resample(fake_sims, real_sims, n_samples=300)
+            scs[i] = real_sim_score(fake_sample, real_sample)
+
+
+        h = sem(scs) * ppf((1 + 0.95) / 2.0, len(scs)-1)
+        logger.info("Resampled RT_SIM_SCORE: %f +- %f" % (np.mean(scs), h))
+        logger.info("Resampled RT_SIM_SCORE stdev: %f" % (np.std(scs)))
+
         # update scores
         # scores['meancossim_%s_%s' % (lang, 'real')] = real_mean_cos_sim
         # scores['stdcossim_%s_%s' % (lang, 'real')] = real_std_cos_sim
@@ -391,6 +405,18 @@ class EvaluatorMT(object):
 
         logger.info("P_SIM_SCORE: %f" % (sc))
         logger.info("RP_SIM_SCORE: %f" % (sc2))
+
+
+        logger.info("Bootstrap-resampled:")
+        scs = np.zeros(100)
+        for i in range(100):
+            fake_sample, real_sample = resample(fake_sims, real_sims, n_samples=300)
+            scs[i] = real_sim_score(fake_sample, real_sample)
+
+
+        h = sem(scs) * ppf((1 + 0.95) / 2.0, len(scs)-1)
+        logger.info("Resampled RP_SIM_SCORE: %f +- %f" % (np.mean(scs), h))
+        logger.info("Resampled RP_SIM_SCORE stdev: %f" % (np.std(scs)))
 
     # def eval_paraphrase_recog(self, lang, scores):
     #     """
@@ -911,10 +937,17 @@ def sim_score(mu1, sigma1, mu2, sigma2):
     return norm.cdf(intersect, mu1, sigma1) - norm.cdf(intersect, mu2, sigma2)
 
 def real_sim_score(fake_sims, real_sims):
-    mu1 = fake_sims.mean(dim=0).item()
-    sigma1 = fake_sims.std(dim=0).item()
-    mu2 = real_sims.mean(dim=0).item()
-    sigma2 = real_sims.std(dim=0).item()
+    if type(fake_sims) is torch.Tensor:
+        mu1 = fake_sims.mean(dim=0).item()
+        sigma1 = fake_sims.std(dim=0).item()
+        mu2 = real_sims.mean(dim=0).item()
+        sigma2 = real_sims.std(dim=0).item()
+    else:
+        mu1 = np.mean(fake_sims)
+        sigma1 = np.std(fake_sims)
+        mu2 = np.mean(real_sims)
+        sigma2 = np.std(real_sims)
+
 
     if sigma1 == sigma2:
         intersect = (mu1 + mu2)/2
