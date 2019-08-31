@@ -318,16 +318,21 @@ class EvaluatorMT(object):
         logger.info("RT_SIM_SCORE: %f" % (sc2))
 
 
-        logger.info("Bootstrap-resampled:")
-        scs = np.zeros(100)
-        for i in range(100):
-            fake_sample, real_sample = resample(fake_sims.cpu().numpy(), real_sims.cpu().numpy(), n_samples=300)
+        logger.info("Bootstrap-resampling...")
+        scs = np.zeros(1000)
+        np.random.seed(0)
+        for_pair_file = open('translation_sims.pair', 'w')
+        for i in range(1000):
+            fake_sample, real_sample = resample(fake_sims.cpu().numpy(), real_sims.cpu().numpy())
             scs[i] = real_sim_score(fake_sample, real_sample)
+            for_pair_file.write(str(scs[i]))
+        
+        for_pair_file.close()
+        logger.info("Bootstrap-resampling done.")
 
-
-        h = sem(scs) * t.ppf((1 + 0.95) / 2.0, len(scs)-1)
-        logger.info("Resampled RT_SIM_SCORE: %f +- %f" % (np.mean(scs), h))
-        logger.info("Resampled RT_SIM_SCORE stdev: %f" % (np.std(scs)))
+        # h = sem(scs) * t.ppf((1 + 0.95) / 2.0, len(scs)-1)
+        # logger.info("Resampled RT_SIM_SCORE: %f +- %f" % (np.mean(scs), h))
+        # logger.info("Resampled RT_SIM_SCORE stdev: %f" % (np.std(scs)))
 
         # update scores
         # scores['meancossim_%s_%s' % (lang, 'real')] = real_mean_cos_sim
@@ -406,16 +411,21 @@ class EvaluatorMT(object):
         logger.info("RP_SIM_SCORE: %f" % (sc2))
 
 
-        logger.info("Bootstrap-resampled:")
-        scs = np.zeros(100)
-        for i in range(100):
-            fake_sample, real_sample = resample(fake_sims.cpu().numpy(), real_sims.cpu().numpy(), n_samples=300)
+        logger.info("Bootstrap-resampling...")
+        scs = np.zeros(1000)
+        np.random.seed(0)
+        for_pair_file = open('paraphrase_sims.pair', 'w')
+        for i in range(1000):
+            fake_sample, real_sample = resample(fake_sims.cpu().numpy(), real_sims.cpu().numpy())
             scs[i] = real_sim_score(fake_sample, real_sample)
+            for_pair_file.write(str(scs[i]))
+        
+        for_pair_file.close()
+        logger.info("Bootstrap-resampling done.")
 
-
-        h = sem(scs) * t.ppf((1 + 0.95) / 2.0, len(scs)-1)
-        logger.info("Resampled RP_SIM_SCORE: %f +- %f" % (np.mean(scs), h))
-        logger.info("Resampled RP_SIM_SCORE stdev: %f" % (np.std(scs)))
+        # h = sem(scs) * t.ppf((1 + 0.95) / 2.0, len(scs)-1)
+        # logger.info("Resampled RP_SIM_SCORE: %f +- %f" % (np.mean(scs), h))
+        # logger.info("Resampled RP_SIM_SCORE stdev: %f" % (np.std(scs)))
 
     # def eval_paraphrase_recog(self, lang, scores):
     #     """
