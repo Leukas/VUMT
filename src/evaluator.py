@@ -12,8 +12,7 @@ from logging import getLogger
 import numpy as np
 import torch
 from torch import nn
-from scipy.stats import norm, sem
-from scipy.stats.t import ppf
+from scipy.stats import norm, sem, t
 from sklearn.utils import resample
 from .utils import restore_segmentation
 from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
@@ -322,11 +321,11 @@ class EvaluatorMT(object):
         logger.info("Bootstrap-resampled:")
         scs = np.zeros(100)
         for i in range(100):
-            fake_sample, real_sample = resample(fake_sims, real_sims, n_samples=300)
+            fake_sample, real_sample = resample(fake_sims.cpu().numpy(), real_sims.cpu().numpy(), n_samples=300)
             scs[i] = real_sim_score(fake_sample, real_sample)
 
 
-        h = sem(scs) * ppf((1 + 0.95) / 2.0, len(scs)-1)
+        h = sem(scs) * t.ppf((1 + 0.95) / 2.0, len(scs)-1)
         logger.info("Resampled RT_SIM_SCORE: %f +- %f" % (np.mean(scs), h))
         logger.info("Resampled RT_SIM_SCORE stdev: %f" % (np.std(scs)))
 
@@ -410,11 +409,11 @@ class EvaluatorMT(object):
         logger.info("Bootstrap-resampled:")
         scs = np.zeros(100)
         for i in range(100):
-            fake_sample, real_sample = resample(fake_sims, real_sims, n_samples=300)
+            fake_sample, real_sample = resample(fake_sims.cpu().numpy(), real_sims.cpu().numpy(), n_samples=300)
             scs[i] = real_sim_score(fake_sample, real_sample)
 
 
-        h = sem(scs) * ppf((1 + 0.95) / 2.0, len(scs)-1)
+        h = sem(scs) * t.ppf((1 + 0.95) / 2.0, len(scs)-1)
         logger.info("Resampled RP_SIM_SCORE: %f +- %f" % (np.mean(scs), h))
         logger.info("Resampled RP_SIM_SCORE stdev: %f" % (np.std(scs)))
 
@@ -622,7 +621,7 @@ class EvaluatorMT(object):
             if self.params.eval_only:
                 filepath = "data/pp/coco/captions_val2014.src-filtered.en.tok.60000.pth"
                 # self.custom_eval(filepath, 'en', None, 'en', scores)
-                self.custom_eval(filepath, 'en','fr', 'en', scores)
+                # self.custom_eval(filepath, 'en','fr', 'en', scores)
 
 
             for lang in self.data['paraphrase'].keys():
