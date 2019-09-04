@@ -325,7 +325,7 @@ class EvaluatorMT(object):
         for i in range(1000):
             fake_sample, real_sample = resample(fake_sims.cpu().numpy(), real_sims.cpu().numpy())
             scs[i] = real_sim_score(fake_sample, real_sample)
-            for_pair_file.write(str(scs[i]))
+            for_pair_file.write(str(scs[i]) + '\n')
         
         for_pair_file.close()
         logger.info("Bootstrap-resampling done.")
@@ -418,7 +418,7 @@ class EvaluatorMT(object):
         for i in range(1000):
             fake_sample, real_sample = resample(fake_sims.cpu().numpy(), real_sims.cpu().numpy())
             scs[i] = real_sim_score(fake_sample, real_sample)
-            for_pair_file.write(str(scs[i]))
+            for_pair_file.write(str(scs[i]) + '\n')
         
         for_pair_file.close()
         logger.info("Bootstrap-resampling done.")
