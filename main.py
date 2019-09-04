@@ -229,8 +229,6 @@ parser.add_argument("--length_penalty", type=float, default=1.0,
                     help="Length penalty: <1.0 favors shorter, >1.0 favors longer sentences")
 
 # VAE params
-parser.add_argument("--eval_vae", type=bool_flag, default=False,
-                    help="Evaluate variational model. Default False")
 parser.add_argument("--eval_samples", type=int, default=10,
                     help="Number of times to sample each test sentence when evaluating.")
 
@@ -282,10 +280,6 @@ if __name__ == '__main__':
     # evaluation mode
     if params.eval_only:
         evaluator.run_all_evals(0)
-        exit()
-
-    if params.eval_vae:
-        evaluator.run_vae_evals(0)
         exit()
 
 
