@@ -133,7 +133,7 @@ def write_ses_bleu_score(sys_score):
         f = open(os.path.join(subm_folder, 'ses_chrf.seg.score'), 'w')
         
 
-    metric_name = "SES_CHRF"
+    metric_name = "BLEUtest"
     test_set = "newstest2018"
 
     enc_ref_folder = os.path.join(output_folder, 'references')
@@ -159,15 +159,16 @@ def write_ses_bleu_score(sys_score):
             with open(bleu_hyp_file, 'r') as hf:
                 hyp_lines = hf.readlines()
             
-            bleus = chrf(ref_lines, hyp_lines)
+            bleus = bleu(ref_lines, hyp_lines)
 
             cossims = cossim(ref_path, hyp_path)
             if sys_score:
-                avg_score = (np.mean(cossims) + np.mean(bleus)) / 2.0
+                # avg_score = (np.mean(cossims) + np.mean(bleus)) / 2.0
+                avg_score = np.mean(bleus)
                 f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(avg_score), 'non-emsemble', 'yes' + '\n']))
             else:
                 for i in range(len(cossims)):
-                    f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), str((cossims[i]+bleus[i])/2.0), 'non-emsemble', 'yes' + '\n']))
+                    f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), str(bleus[i]), 'non-emsemble', 'yes' + '\n']))
 
     f.close()
 
@@ -248,7 +249,19 @@ def calc_ses(exp_name, exp_id, hyp_num):
     
 
     
-parser = argparse.ArgumentParser(description='Language transfer')
+parser = argparse.ArgumentParser(description=""" 
+There are a couple uses for this script. If you want to reproduce WMT18 metrics task 
+correlation results, this can be used to create the outputs. Just run: \n
+For sentence-level scores: \n
+python ses_score.py --encode_refs --encode_hyps --write_ses_score \n
+For system-level scores: \n
+python ses_score.py --encode_refs --encode_hyps --write_ses_score --sys_score \n
+\n
+If you want to get SES scores for any epoch in an experiment, run: \n
+python ses_score.py --exp_name name_of_the_experiment --exp_id experiment_id --hyp_num epoch_number \n
+\n 
+For all epochs, --hyp_num all \n
+""")
 parser.add_argument("--encode_refs", action="store_true",
                     help="Encode ref sentences (for WMT)")
 parser.add_argument("--encode_hyps", action="store_true",
@@ -269,7 +282,6 @@ params = parser.parse_args()
 
 
 
-
 if __name__ == "__main__":
 
 
@@ -282,8 +294,9 @@ if __name__ == "__main__":
     if params.write_ses_bleu:
         write_ses_bleu_score(params.sys_score)
     if params.exp_name is not "":
-        if params.hyp_num is "all":
-            for i in range(len(glob.glob('hyp*.fr-en.test.txt'))):
+        if params.hyp_num=="all":
+            dump_path = os.path.join('../dumped/', params.exp_name, params.exp_id)
+            for i in range(len(glob.glob(os.path.join(dump_path,'hyp*.fr-en.test.txt')))):
                 calc_ses(params.exp_name, params.exp_id, str(i))          
         else:
             calc_ses(params.exp_name, params.exp_id, params.hyp_num)
