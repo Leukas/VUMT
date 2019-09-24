@@ -1,6 +1,7 @@
 import os
 import glob
-os.environ["LASER"]="%s/u2/tools/LASER/" % os.environ['HOME']
+current_dir = os.getcwd()
+os.environ["LASER"]="%s/tools/LASER/" % current_dir
 import subprocess
 import numpy as np
 import scipy.spatial.distance as dist
@@ -9,12 +10,13 @@ from nltk.translate.bleu_score import sentence_bleu
 from nltk.translate.chrf_score import sentence_chrf
 # import source.embed as embed
 
-# ref_folder = '%s/u2/metrics/wmt14-data/txt/references/' % os.environ['HOME']
-# hyp_folder = '%s/u2/metrics/wmt14-data/txt/system-outputs/newstest2014/' % os.environ['HOME']
 
-ref_folder = '%s/u2/metrics/wmt18-submitted-data/txt/references/' % os.environ['HOME']
-hyp_folder = '%s/u2/metrics/wmt18-submitted-data/txt/system-outputs/newstest2018/' % os.environ['HOME']
-output_folder = '%s/u2/metrics/encodings/wmt18/' % os.environ['HOME']
+# ref_folder = '%s/metrics/wmt14-data/txt/references/' % current_dir
+# hyp_folder = '%s/metrics/wmt14-data/txt/system-outputs/newstest2014/' % current_dir
+
+ref_folder = '%s/metrics/wmt18-submitted-data/txt/references/' % current_dir
+hyp_folder = '%s/metrics/wmt18-submitted-data/txt/system-outputs/newstest2018/' % current_dir
+output_folder = '%s/metrics/encodings/wmt18/' % current_dir
 
 
 def embed(input_file, lang, output_file):
@@ -81,8 +83,9 @@ def cossim(ref_corpus, hyp_corpus):
 
 
 def write_ses_score(sys_score):
-    # subm_folder = '%s/u2/metrics/wmt14-metrics-task/submissions/SES/' % os.environ['HOME']
-    subm_folder = '%s/u2/metrics/wmt18-metrics-task-package/final-metric-scores/submissions-processed/' % os.environ['HOME']
+    """ Write SES scores of WMT18 systems to a file. """
+    # subm_folder = '%s/metrics/wmt14-metrics-task/submissions/SES/' % current_dir
+    subm_folder = '%s/metrics/wmt18-metrics-task-package/final-metric-scores/submissions-processed/' % current_dir
     if not os.path.isdir(subm_folder):
         os.mkdir(subm_folder)
 
@@ -121,19 +124,20 @@ def write_ses_score(sys_score):
     f.close()
 
 def write_ses_bleu_score(sys_score):
-    # subm_folder = '%s/u2/metrics/wmt14-metrics-task/submissions/SES/' % os.environ['HOME']
-    subm_folder = '%s/u2/metrics/wmt18-metrics-task-package/final-metric-scores/submissions-processed/' % os.environ['HOME']
+    """ Testing a 50/50 SES/BLEU score """
+    # subm_folder = '%s/metrics/wmt14-metrics-task/submissions/SES/' % current_dir
+    subm_folder = '%s/metrics/wmt18-metrics-task-package/final-metric-scores/submissions-processed/' % current_dir
     if not os.path.isdir(subm_folder):
         os.mkdir(subm_folder)
 
 
     if sys_score:
-        f = open(os.path.join(subm_folder, 'ses_chrf.sys.score'), 'w')
+        f = open(os.path.join(subm_folder, 'ses_bleu.sys.score'), 'w')
     else:
-        f = open(os.path.join(subm_folder, 'ses_chrf.seg.score'), 'w')
+        f = open(os.path.join(subm_folder, 'ses_bleu.seg.score'), 'w')
         
 
-    metric_name = "BLEUtest"
+    metric_name = "SES_BLEU"
     test_set = "newstest2018"
 
     enc_ref_folder = os.path.join(output_folder, 'references')
@@ -172,6 +176,25 @@ def write_ses_bleu_score(sys_score):
 
     f.close()
 
+def calc_ses_score(ref, hyp, ref_lang, hyp_lang, save_ref=False, save_hyp=False):
+    """ Run SES for two files, don't save the encoding files"""
+    ref_output = '.'.join(ref.split('.')[:-1])+'.enc'
+    hyp_output = '.'.join(hyp.split('.')[:-1])+'.enc'
+    ref_enc_exists = os.path.isfile(ref_output)
+    hyp_enc_exists = os.path.isfile(hyp_output)
+
+    if not ref_enc_exists:
+        embed(ref, ref_lang, ref_output)
+    if not hyp_enc_exists:
+        embed(hyp, hyp_lang, hyp_output)
+    cosines = cossim(ref_output, hyp_output)
+    print("AVG SES score:", np.mean(cosines))
+
+    if not save_ref and not ref_enc_exists:
+        os.remove(ref_output)
+    if not save_hyp and not hyp_enc_exists:
+        os.remove(hyp_output)
+
 
 def bleu(ref_lines, hyp_lines):
     """ sentence-level bleu, for comparison with ses"""
@@ -194,10 +217,7 @@ def chrf(ref_lines, hyp_lines):
     return chrfs
 
 def calc_ses(exp_name, exp_id, hyp_num):
-
-    # if not os.isdir('../encodings/'):
-    #     os.mkdir('../encodings/')
-    dump_path = os.path.join('../dumped/', exp_name, exp_id)
+    dump_path = os.path.join('dumped/', exp_name, exp_id)
 
     ref_file_exts = ['ref.en-fr.test.txt',
         'ref.en-fr.valid.txt',
@@ -217,7 +237,6 @@ def calc_ses(exp_name, exp_id, hyp_num):
 
         filepath = os.path.join(dump_path, file_ext)
         if not os.path.isfile(os.path.join(dump_path, output_file)):
-            # print('notafile:%s', os.path.join(dump_path, output_file))
             embed(filepath, lang, os.path.join(dump_path, output_file))
             
 
@@ -226,7 +245,6 @@ def calc_ses(exp_name, exp_id, hyp_num):
         ref_enc = os.path.join(dump_path, '.'.join(ref_file_exts[i].split('.')[:-1])+'.enc')
         hyp_enc = os.path.join(dump_path, '.'.join(hyp_file_exts[i].split('.')[:-1])+'.enc')
 
-        # cos = cossim(os.path.join(dump_path, ref_file_exts[i]), os.path.join(dump_path, hyp_file_exts[i]))
         cos = cossim(ref_enc, hyp_enc)
         with open(os.path.join(dump_path, ref_file_exts[i]), 'r') as f:
             ref_lines = f.readlines()
@@ -236,7 +254,6 @@ def calc_ses(exp_name, exp_id, hyp_num):
         bleus = bleu(ref_lines, hyp_lines)
 
         cos_inds = np.argsort(cos-bleus)[::-1]
-        # hyp_file = open(os.path.join(dump_path, hyp_file_exts[i]), 'r')
         with open(os.path.join(dump_path,'cos.' + '.'.join(ref_file_exts[i].split('.')[1:])), 'w') as f:
             for ind in cos_inds:
                 f.write('\t'.join([str(cos[ind]), str(bleus[ind]), ref_lines[ind], hyp_lines[ind]]))
@@ -249,19 +266,7 @@ def calc_ses(exp_name, exp_id, hyp_num):
     
 
     
-parser = argparse.ArgumentParser(description=""" 
-There are a couple uses for this script. If you want to reproduce WMT18 metrics task 
-correlation results, this can be used to create the outputs. Just run: \n
-For sentence-level scores: \n
-python ses_score.py --encode_refs --encode_hyps --write_ses_score \n
-For system-level scores: \n
-python ses_score.py --encode_refs --encode_hyps --write_ses_score --sys_score \n
-\n
-If you want to get SES scores for any epoch in an experiment, run: \n
-python ses_score.py --exp_name name_of_the_experiment --exp_id experiment_id --hyp_num epoch_number \n
-\n 
-For all epochs, --hyp_num all \n
-""")
+parser = argparse.ArgumentParser(description='Write ses scores to a file.')
 parser.add_argument("--encode_refs", action="store_true",
                     help="Encode ref sentences (for WMT)")
 parser.add_argument("--encode_hyps", action="store_true",
@@ -278,12 +283,46 @@ parser.add_argument("--exp_id", type=str, default="",
                     help="Experiment ID")
 parser.add_argument("--hyp_num", type=str, default="",
                     help="Hypothesis epoch num")
+parser.add_argument("--ref", type=str, default="",
+                    help="Reference filepath")
+parser.add_argument("--hyp", type=str, default="",
+                    help="Hypothesis filepath")
+parser.add_argument("--ref_lang", type=str, default="en",
+                    help="Reference language")
+parser.add_argument("--hyp_lang", type=str, default="en",
+                    help="Hypothesis language")                    
+parser.add_argument("--save_ref", action="store_true",
+                    help="Save reference encoding")
+parser.add_argument("--save_hyp", action="store_true",
+                    help="Save hypothesis encoding")
 params = parser.parse_args()
 
 
-
 if __name__ == "__main__":
+    """ 
+    There are a few uses for this script. If you want to reproduce WMT18 metrics task 
+    correlation results, this can be used to create the outputs.
+    For sentence-level scores:
+    python src/ses_score.py --encode_refs --encode_hyps --write_ses_score
+    For system-level scores:
+    python src/ses_score.py --encode_refs --encode_hyps --write_ses_score --sys_score
 
+    If you want to get SES scores for any epoch in an experiment, run:
+    python src/ses_score.py --exp_name name_of_the_experiment --exp_id experiment_id --hyp_num epoch_number
+
+    For all epochs, --hyp_num all
+
+    If you simply want to run SES for a reference and hypothesis file:
+
+    python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --ref_lang ref_language --hyp_lang hyp_language
+
+    The flags --ref_lang and --hyp_lang are only necessary if you care about which language MOSES uses for tokenization.
+    If you want to save the LASER encodings for later (faster) reevaluation:
+
+    python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --save_ref --save_hyp
+
+    The LASER encodings will be saved to the same folder(s) as the reference or hypothesis files. 
+    """
 
     if params.encode_refs:
         encode_refs(os.listdir(ref_folder))
@@ -301,46 +340,12 @@ if __name__ == "__main__":
         else:
             calc_ses(params.exp_name, params.exp_id, params.hyp_num)
 
-
-# def tokenize(filepath, lang):
-#     TOKENIZER = '~/u2/tools/mosesdecoder/scripts/tokenizer/tokenizer.perl'
-#     command = TOKENIZER + '-l %s < %s'
-#     p = subprocess.Popen(command % (lang, filepath), stdout=subprocess.PIPE, shell=True)
-#     result = p.communicate()[0].decode("utf-8")
-#     print(result)
-#     # if result.startswith('BLEU'):
-#     #     return float(result[7:result.index(',')])
-#     # else:
-#     #     logger.warning('Impossible to parse BLEU score! "%s"' % result)
-#     #     return -1
-
-
-
-
-
-# if [ -z ${LASER+x} ] ; then
-#   echo "Please set the environment variable 'LASER'"
-#   exit
-# fi
-
-# if [ $# -ne 3 ] ; then
-#   echo "usage embed.sh input-file language output-file"
-#   exit
-# fi
-
-# ifile=$1
-# lang=$2
-# ofile=$3
-
-# # encoder
-# model_dir="${LASER}/models"
-# encoder="${model_dir}/bilstm.93langs.2018-12-26.pt"
-# bpe_codes="${model_dir}/93langs.fcodes"
-
-# cat $ifile \
-#   | python3 ${LASER}/source/embed.py \
-#     --encoder ${encoder} \
-#     --token-lang ${lang} \
-#     --bpe-codes ${bpe_codes} \
-#     --output ${ofile} \
-#     --verbose
+    if params.ref:
+        calc_ses_score(
+            params.ref, 
+            params.hyp, 
+            params.ref_lang, 
+            params.hyp_lang, 
+            params.save_ref, 
+            params.save_hyp
+            )
