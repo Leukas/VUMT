@@ -34,6 +34,29 @@ Note: the "vae_samples" argument is typically best as a mulitple of the number o
 ## Sentence Embedding Similarity (SES)
 To get SES scores on a text or reproduce our correlation results on WMT18, you can run ses_score.py. We assume you have [LASER](https://github.com/facebookresearch/LASER) installed to tools/LASER/
 
+### Files from anywhere
+If you simply want to run SES for a reference and hypothesis file:
+
+python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --ref_lang ref_language --hyp_lang hyp_language
+
+The flags --ref_lang and --hyp_lang are only necessary if you care about which language MOSES uses for tokenization.
+
+If you want to save the LASER encodings for later (faster) reevaluation:
+
+python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --save_ref --save_hyp
+
+The LASER encodings will be saved to the same folder(s) as the reference or hypothesis files. 
+
+
+### Files from an experiment
+If you want to get SES scores for any epoch in an experiment, run:
+```
+python src/ses_score.py --exp_name name_of_the_experiment --exp_id experiment_id --hyp_num epoch_number
+```
+For all epochs, set --hyp_num to "all"
+
+
+### WMT18 files
 To reproduce WMT18 correlation scores, we assume you have downloaded the submitted data and metrics task package to the respective folders:
 metrics/wmt18-submitted-data/
 metrics/wmt18-metrics-task-package/
@@ -50,9 +73,3 @@ python src/ses_score.py --encode_refs --encode_hyps --write_ses_score --sys_scor
 ```
 
 
-
-If you want to get SES scores for any epoch in an experiment, run:
-```
-python src/ses_score.py --exp_name name_of_the_experiment --exp_id experiment_id --hyp_num epoch_number
-```
-For all epochs, set --hyp_num to "all"

@@ -175,6 +175,20 @@ def write_ses_bleu_score(sys_score):
 
     f.close()
 
+def calc_ses_score(ref, hyp, ref_lang, hyp_lang, save_ref=False, save_hyp=False):
+    """ Run SES for two files, don't save the encoding files"""
+    ref_output = '.'.join(ref.split('.')[:-1])+'.enc'
+    hyp_output = '.'.join(hyp.split('.')[:-1])+'.enc'
+    embed(ref, ref_lang, ref_output)
+    embed(hyp, hyp_lang, hyp_output)
+    cosines = cossim(ref_output, hyp_output)
+    print("AVG SES score:", np.mean(cosines))
+
+    if not save_ref:
+        os.remove(ref_output)
+    if not save_hyp:
+        os.remove(hyp_output)
+
 
 def bleu(ref_lines, hyp_lines):
     """ sentence-level bleu, for comparison with ses"""
@@ -263,12 +277,24 @@ parser.add_argument("--exp_id", type=str, default="",
                     help="Experiment ID")
 parser.add_argument("--hyp_num", type=str, default="",
                     help="Hypothesis epoch num")
+parser.add_argument("--ref", type=str, default="",
+                    help="Reference filepath")
+parser.add_argument("--hyp", type=str, default="",
+                    help="Hypothesis filepath")
+parser.add_argument("--ref_lang", type=str, default="en",
+                    help="Reference language")
+parser.add_argument("--hyp_lang", type=str, default="en",
+                    help="Hypothesis language")                    
+parser.add_argument("--save_ref", action="store_true",
+                    help="Save reference encoding")
+parser.add_argument("--save_hyp", action="store_true",
+                    help="Save hypothesis encoding")
 params = parser.parse_args()
 
 
 if __name__ == "__main__":
     """ 
-    There are a couple uses for this script. If you want to reproduce WMT18 metrics task 
+    There are a few uses for this script. If you want to reproduce WMT18 metrics task 
     correlation results, this can be used to create the outputs.
     For sentence-level scores:
     python src/ses_score.py --encode_refs --encode_hyps --write_ses_score
@@ -279,6 +305,18 @@ if __name__ == "__main__":
     python src/ses_score.py --exp_name name_of_the_experiment --exp_id experiment_id --hyp_num epoch_number
 
     For all epochs, --hyp_num all
+
+
+    If you simply want to run SES for a reference and hypothesis file:
+
+    python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --ref_lang ref_language --hyp_lang hyp_language
+
+    The flags --ref_lang and --hyp_lang are only necessary if you care about which language MOSES uses for tokenization.
+    If you want to save the LASER encodings for later (faster) reevaluation:
+
+    python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --save_ref --save_hyp
+
+    The LASER encodings will be saved to the same folder(s) as the reference or hypothesis files. 
     """
 
     if params.encode_refs:
@@ -296,3 +334,12 @@ if __name__ == "__main__":
         else:
             calc_ses(params.exp_name, params.exp_id, params.hyp_num)
 
+    if params.ref:
+        calc_ses_score(
+            params.ref, 
+            params.hyp, 
+            params.ref_lang, 
+            params.hyp_lang, 
+            params.save_ref, 
+            params.save_hyp
+            )
