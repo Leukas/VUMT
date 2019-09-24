@@ -167,11 +167,12 @@ def write_ses_bleu_score(sys_score):
 
             cossims = cossim(ref_path, hyp_path)
             if sys_score:
-                avg_score = (np.mean(cossims) + np.mean(bleus)) / 2.0
+                # avg_score = (np.mean(cossims) + np.mean(bleus)) / 2.0
+                avg_score = np.mean(bleus)
                 f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(avg_score), 'non-emsemble', 'yes' + '\n']))
             else:
                 for i in range(len(cossims)):
-                    f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), str((cossims[i]+bleus[i])/2.0), 'non-emsemble', 'yes' + '\n']))
+                    f.write('\t'.join([metric_name, lang_pair, test_set, system_name, str(i+1), str(bleus[i]), 'non-emsemble', 'yes' + '\n']))
 
     f.close()
 
@@ -179,14 +180,19 @@ def calc_ses_score(ref, hyp, ref_lang, hyp_lang, save_ref=False, save_hyp=False)
     """ Run SES for two files, don't save the encoding files"""
     ref_output = '.'.join(ref.split('.')[:-1])+'.enc'
     hyp_output = '.'.join(hyp.split('.')[:-1])+'.enc'
-    embed(ref, ref_lang, ref_output)
-    embed(hyp, hyp_lang, hyp_output)
+    ref_enc_exists = os.path.isfile(ref_output)
+    hyp_enc_exists = os.path.isfile(hyp_output)
+
+    if not ref_enc_exists:
+        embed(ref, ref_lang, ref_output)
+    if not hyp_enc_exists:
+        embed(hyp, hyp_lang, hyp_output)
     cosines = cossim(ref_output, hyp_output)
     print("AVG SES score:", np.mean(cosines))
 
-    if not save_ref:
+    if not save_ref and not ref_enc_exists:
         os.remove(ref_output)
-    if not save_hyp:
+    if not save_hyp and not hyp_enc_exists:
         os.remove(hyp_output)
 
 
@@ -306,7 +312,6 @@ if __name__ == "__main__":
 
     For all epochs, --hyp_num all
 
-
     If you simply want to run SES for a reference and hypothesis file:
 
     python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --ref_lang ref_language --hyp_lang hyp_language
@@ -328,8 +333,9 @@ if __name__ == "__main__":
     if params.write_ses_bleu:
         write_ses_bleu_score(params.sys_score)
     if params.exp_name is not "":
-        if params.hyp_num is "all":
-            for i in range(len(glob.glob('hyp*.fr-en.test.txt'))):
+        if params.hyp_num=="all":
+            dump_path = os.path.join('../dumped/', params.exp_name, params.exp_id)
+            for i in range(len(glob.glob(os.path.join(dump_path,'hyp*.fr-en.test.txt')))):
                 calc_ses(params.exp_name, params.exp_id, str(i))          
         else:
             calc_ses(params.exp_name, params.exp_id, params.hyp_num)
