@@ -15,7 +15,7 @@ from torch import nn
 from scipy.stats import norm, sem, t
 from sklearn.utils import resample
 from .utils import restore_segmentation
-from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
+# from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
 from src.data.loader import load_custom_data
 logger = getLogger()
 
@@ -321,7 +321,8 @@ class EvaluatorMT(object):
         logger.info("Bootstrap-resampling...")
         scs = np.zeros(1000)
         np.random.seed(0)
-        for_pair_file = open('translation_sims.pair', 'w')
+        hyp_path = os.path.join(self.params.dump_path, 'translation_sims.pair')
+        for_pair_file = open(hyp_path, 'w')
         for i in range(1000):
             fake_sample, real_sample = resample(fake_sims.cpu().numpy(), real_sims.cpu().numpy())
             scs[i] = real_sim_score(fake_sample, real_sample)
@@ -329,33 +330,6 @@ class EvaluatorMT(object):
         
         for_pair_file.close()
         logger.info("Bootstrap-resampling done.")
-
-        # h = sem(scs) * t.ppf((1 + 0.95) / 2.0, len(scs)-1)
-        # logger.info("Resampled RT_SIM_SCORE: %f +- %f" % (np.mean(scs), h))
-        # logger.info("Resampled RT_SIM_SCORE stdev: %f" % (np.std(scs)))
-
-        # update scores
-        # scores['meancossim_%s_%s' % (lang, 'real')] = real_mean_cos_sim
-        # scores['stdcossim_%s_%s' % (lang, 'real')] = real_std_cos_sim
-
-        # if scores['meancossim_%s_%s' % (lang, 'test_real')] < scores['meancossim_%s_%s' % (lang, 'test_fake')]:
-        #     # this really should never happen except for maybe early in training...
-        #     sc = sim_score(
-        #         scores['meancossim_%s_%s' % (lang, 'test_fake')],
-        #         scores['stdcossim_%s_%s' % (lang, 'test_fake')],
-        #         scores['meancossim_%s_%s' % (lang, 'test_real')],
-        #         scores['stdcossim_%s_%s' % (lang, 'test_real')])
-        # else:
-        #     sc = sim_score(
-        #         scores['meancossim_%s_%s' % (lang, 'test_fake')],
-        #         scores['stdcossim_%s_%s' % (lang, 'test_fake')],
-        #         scores['meancossim_%s_%s' % (lang, 'test_real')],
-        #         scores['stdcossim_%s_%s' % (lang, 'test_real')])
-
-        #     logger.info("SIM_SCORE: %f" % (sc))
-
-        # # update scores
-        # scores['simscore_%s' % (lang)] = sc
 
     def eval_paraphrase_recog(self, lang, scores):
         """
@@ -415,7 +389,8 @@ class EvaluatorMT(object):
         logger.info("Bootstrap-resampling...")
         scs = np.zeros(1000)
         np.random.seed(0)
-        for_pair_file = open('paraphrase_sims.pair', 'w')
+        hyp_path = os.path.join(self.params.dump_path, 'paraphrase_sims.pair')
+        for_pair_file = open(hyp_path, 'w')
         for i in range(1000):
             fake_sample, real_sample = resample(fake_sims.cpu().numpy(), real_sims.cpu().numpy())
             scs[i] = real_sim_score(fake_sample, real_sample)
@@ -424,13 +399,29 @@ class EvaluatorMT(object):
         for_pair_file.close()
         logger.info("Bootstrap-resampling done.")
 
-        # h = sem(scs) * t.ppf((1 + 0.95) / 2.0, len(scs)-1)
-        # logger.info("Resampled RP_SIM_SCORE: %f +- %f" % (np.mean(scs), h))
-        # logger.info("Resampled RP_SIM_SCORE stdev: %f" % (np.std(scs)))
 
     def custom_eval(self, filepath, input_lang, imd_lang, output_lang, second_step_noise):
         """
-        Run on custom data with custom methods
+        Run on custom data. 
+        Can either do 
+        L_src -> L_tgt 
+        or 
+        L_src -> L_imd -> L_tgt
+
+        If no intermediate lang, set imd_lang = None
+        If the model is variational, variational noise is added at the first step by default, 
+        or at the second step if second_step_noise = True. The noise added is from N(0,0) 
+        (i.e. no noise) up to N(0, eval_samples-1).
+
+        Outputs are saved to files (in the dumped folder) for analysis. The format follows:
+        cust{noise_value}.{l_src}-{l_tgt}.txt
+
+        Or when there is an intermediate language:
+        cust{noise_value}.{l_src}--{l_imd}-{l_tgt}.txt
+        or 
+        cust{noise_value}.{l_src}-{l_imd}--{l_tgt}.txt
+        
+        The second dash indicates which step noise was added.
         """
         dataset = load_custom_data(filepath, input_lang, self.params, self.data)
         input_lang_id = self.params.lang2id[input_lang]
@@ -533,24 +524,24 @@ class EvaluatorMT(object):
             hyp_txts.append(txt)
 
         for i, hyp_txt in enumerate(hyp_txts):
-            bleui = eval_nltk_bleu(tgt_txt, hyp_txt)
-            logger.info("BLEU #%d: %f" % (i, bleui))
+            # bleui = eval_nltk_bleu(tgt_txt, hyp_txt)
+            # logger.info("BLEU #%d: %f" % (i, bleui))
             hyp_path = os.path.join(params.dump_path, 'multic{0}.{1}-{2}.txt'.format(i, lang1, lang2))
             with open(hyp_path,'w', encoding='utf-8') as f:
                 f.write('\n'.join(hyp_txt)+'\n')
 
-        final_hyp_txt = choose_sentences(hyp_txts, 'best', self.params, tgt_txt=tgt_txt)
+        # final_hyp_txt = choose_sentences(hyp_txts, 'best', self.params, tgt_txt=tgt_txt)
 
-        final_bleu_score = eval_nltk_bleu(tgt_txt, final_hyp_txt)*100
-        final_pinc_score = eval_pinc(src_txt, final_hyp_txt)
+        # final_bleu_score = eval_nltk_bleu(tgt_txt, final_hyp_txt)*100
+        # final_pinc_score = eval_pinc(src_txt, final_hyp_txt)
 
 
-        logger.info("MULTI_BLEU : %f" % (final_bleu_score))
-        logger.info("MULTI_PINC : %f" % (final_pinc_score))
+        # logger.info("MULTI_BLEU : %f" % (final_bleu_score))
+        # logger.info("MULTI_PINC : %f" % (final_pinc_score))
 
-            # update scores
-        scores['multi_bleu_%s_%s_%s' % (lang1, lang2, data_type)] = final_bleu_score
-        scores['multi_pinc_%s_%s_%s' % (lang1, lang2, data_type)] = final_pinc_score
+        #     # update scores
+        # scores['multi_bleu_%s_%s_%s' % (lang1, lang2, data_type)] = final_bleu_score
+        # scores['multi_pinc_%s_%s_%s' % (lang1, lang2, data_type)] = final_pinc_score
 
 
     def run_all_evals(self, epoch):
@@ -568,19 +559,12 @@ class EvaluatorMT(object):
 
 
             for lang in self.data['paraphrase'].keys():
-            #     # print('LANG LANG', lang)
-            #     # self.multi_sample_eval(lang, lang, 'test_real', scores)
                 self.eval_paraphrase_recog(lang, scores)
 
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
                     self.eval_translation_recog(lang1, lang2, data_type, scores)
                     self.eval_translation_recog(lang2, lang1, data_type, scores)
-                    # self.eval_translation_recog(lang2, lang1, data_type, scores)
-                    #if self.params.eval_only and self.params.variational:
-                    #    self.multi_sample_eval(lang1, lang2, data_type, scores)
-                    #    self.multi_sample_eval(lang2, lang1, data_type, scores)
-
                     
                     self.eval_para(lang1, lang2, data_type, scores)
                     self.eval_para(lang2, lang1, data_type, scores)
@@ -611,15 +595,6 @@ def eval_moses_bleu(ref, hyp):
     else:
         logger.warning('Impossible to parse BLEU score! "%s"' % result)
         return -1
-
-def eval_nltk_bleu(ref, hyp):
-    """
-    Given texts of structure: [ref1, ref2, ref3], [hyp1, hyp2, hyp3]
-    Convert to proper structure for corpus_bleu, and run it.
-    """
-    ref_bleu = [[r.split()] for r in ref]
-    hyp_bleu = [h.split() for h in hyp]
-    return corpus_bleu(ref_bleu, hyp_bleu)
 
 def eval_pinc(ref, hyp):
     pinc_sum = 0.0
@@ -706,31 +681,6 @@ def real_sim_score(fake_sims, real_sims):
     
     return correct/total
     
-
-
-def choose_sentences(texts, method, params, tgt_txt=None):
-    """ Choose sentences """
-    if method == 'random':
-        final_text = []
-        for i in range(len(texts[0])):
-            idx = np.random.choice(params.eval_samples)
-            final_text.append(texts[idx][i])
-        return final_text
-    elif method == 'best': # choosing best BLEU, just to show theoretical max
-        final_text = []
-        for i in range(len(texts[0])):
-            best_bleu = 0
-            best_bleu_idx = 0
-            for j in range(params.eval_samples):
-                b = sentence_bleu([tgt_txt[i].split()], texts[j][i].split())
-                if b > best_bleu:
-                    best_bleu = b
-                    best_bleu_idx = j
-            final_text.append(texts[best_bleu_idx][i])
-        return final_text
-    else:
-        pass # TODO: AWD choice
-
 def convert_to_text(batch, lengths, dico, lang_id, params):
     """
     Convert a batch of sentences to a list of text sentences.
