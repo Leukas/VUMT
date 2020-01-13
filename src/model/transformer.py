@@ -172,10 +172,10 @@ class TransformerEncoder(nn.Module):
             elif isinstance(noise, float): # noise with specified magnitude
                 #noise_mag = noise/20.0
                 noise_mag = noise
-                noise = torch.randn(x_std.size()[1:])
+                noise = torch.randn(x_std.size()[1:])*noise_mag
                 # noise = torch.randn(1)*torch.ones(x_std.size()[1:])*noise_mag
-                cur_mag = torch.norm(noise, dim=1)
-                noise = (noise.t() * (noise_mag / cur_mag)).t()
+                # cur_mag = torch.norm(noise, dim=1)
+                # noise = (noise.t() * (noise_mag / cur_mag)).t()
 
             noise = noise.type_as(x_std)
             # noise /= x_std.size()[0]
