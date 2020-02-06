@@ -36,15 +36,15 @@ To get SES scores on a text or reproduce our correlation results on WMT18, you c
 
 ### Files from anywhere
 If you simply want to run SES for a reference and hypothesis file:
-
+```
 python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --ref_lang ref_language --hyp_lang hyp_language
-
+```
 The flags --ref_lang and --hyp_lang are only necessary if you care about which language MOSES uses for tokenization.
 
 If you want to save the LASER encodings for later (faster) reevaluation:
-
+```
 python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --save_ref --save_hyp
-
+```
 The LASER encodings will be saved to the same folder(s) as the reference or hypothesis files. 
 
 
