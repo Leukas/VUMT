@@ -481,7 +481,12 @@ class EvaluatorMT(object):
 
     def multi_sample_eval(self, lang1, lang2, data_type, scores):
         """
-            Samples several times and chooses with a choice function
+            Similar to custom_eval, with the only difference that we use the default datasets.
+            Can/Should be combined with custom_eval in the future.
+
+            Samples several times, does L_src -> L_tgt, samples 
+            from increasing distances from the mean. N(0, 0) to N(0, eval_samples)
+            Outputs are saved to multic{noise_value}.{l_src}_{l_tgt}
         """
         self.encoder.eval()
         self.decoder.eval()
@@ -524,24 +529,11 @@ class EvaluatorMT(object):
             hyp_txts.append(txt)
 
         for i, hyp_txt in enumerate(hyp_txts):
-            # bleui = eval_nltk_bleu(tgt_txt, hyp_txt)
-            # logger.info("BLEU #%d: %f" % (i, bleui))
             hyp_path = os.path.join(params.dump_path, 'multic{0}.{1}-{2}.txt'.format(i, lang1, lang2))
             with open(hyp_path,'w', encoding='utf-8') as f:
                 f.write('\n'.join(hyp_txt)+'\n')
 
-        # final_hyp_txt = choose_sentences(hyp_txts, 'best', self.params, tgt_txt=tgt_txt)
 
-        # final_bleu_score = eval_nltk_bleu(tgt_txt, final_hyp_txt)*100
-        # final_pinc_score = eval_pinc(src_txt, final_hyp_txt)
-
-
-        # logger.info("MULTI_BLEU : %f" % (final_bleu_score))
-        # logger.info("MULTI_PINC : %f" % (final_pinc_score))
-
-        #     # update scores
-        # scores['multi_bleu_%s_%s_%s' % (lang1, lang2, data_type)] = final_bleu_score
-        # scores['multi_pinc_%s_%s_%s' % (lang1, lang2, data_type)] = final_pinc_score
 
 
     def run_all_evals(self, epoch):
