@@ -176,7 +176,7 @@ def write_ses_bleu_score(sys_score):
 
     f.close()
 
-def calc_ses_score(ref, hyp, ref_lang, hyp_lang, save_ref=False, save_hyp=False):
+def calc_ses_score(ref, hyp, ref_lang, hyp_lang, save_ref=False, save_hyp=False, avg=False):
     """ Run SES for two files, don't save the encoding files"""
     ref_output = '.'.join(ref.split('.')[:-1])+'.enc'
     hyp_output = '.'.join(hyp.split('.')[:-1])+'.enc'
@@ -188,7 +188,11 @@ def calc_ses_score(ref, hyp, ref_lang, hyp_lang, save_ref=False, save_hyp=False)
     if not hyp_enc_exists:
         embed(hyp, hyp_lang, hyp_output)
     cosines = cossim(ref_output, hyp_output)
-    print("AVG SES score:", np.mean(cosines))
+
+    if avg:
+        print(np.mean(cosines))
+    else:
+        print('\n'.join([str(x) for x in cosines]) + '\n')
 
     if not save_ref and not ref_enc_exists:
         os.remove(ref_output)
@@ -295,6 +299,8 @@ parser.add_argument("--save_ref", action="store_true",
                     help="Save reference encoding")
 parser.add_argument("--save_hyp", action="store_true",
                     help="Save hypothesis encoding")
+parser.add_argument("--avg_score", action="store_true",
+                    help="Get average score (rather than individual scores)")
 params = parser.parse_args()
 
 
@@ -347,5 +353,6 @@ if __name__ == "__main__":
             params.ref_lang, 
             params.hyp_lang, 
             params.save_ref, 
-            params.save_hyp
+            params.save_hyp,
+            params.avg_score,
             )

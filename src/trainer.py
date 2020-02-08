@@ -787,9 +787,11 @@ class TrainerMT(MultiprocessingEventLoop):
         if backprop_temperature == -1:
             # lang2 -> lang3
             encoded = self.encoder(sent2, len2, lang_id=lang2_id, noise=-vae_noise)
+            # encoded = self.encoder(sent2, len2, lang_id=lang2_id, noise=0)
         else:
             # lang1 -> lang2
             encoded = self.encoder(sent1, len1, lang_id=lang1_id, noise=-vae_noise)
+            # encoded = self.encoder(sent1, len1, lang_id=lang1_id, noise=0)
             scores = self.decoder(encoded, sent2[:-1], lang_id=lang2_id)
             assert scores.size() == (len2.max() - 1, bs, n_words2)
 
@@ -798,6 +800,7 @@ class TrainerMT(MultiprocessingEventLoop):
             bos[0, :, params.bos_index[lang2_id]] = 1
             sent2_input = torch.cat([bos, F.softmax(scores / backprop_temperature, -1)], 0)
             encoded = self.encoder(sent2_input, len2, lang_id=lang2_id, noise=-vae_noise)
+            # encoded = self.encoder(sent2_input, len2, lang_id=lang2_id, noise=0)
 
         # cross-entropy scores / loss
         scores = self.decoder(encoded, sent3[:-1], lang_id=lang3_id)

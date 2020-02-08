@@ -32,19 +32,21 @@ Note: the "vae_samples" argument is typically best as a mulitple of the number o
 
 
 ## Sentence Embedding Similarity (SES)
+SES is a neural MT evaluation metric that simply takes the cosine similarity of [LASER](https://github.com/facebookresearch/LASER) sentence embeddings. In my thesis, I compare this to the metrics in the WMT18 Metrics Shared Task, and it achieves state-of-the-art results, slightly outperformed by the more elaborate [RUSE](https://github.com/Shi-ma/RUSE) and [YiSi](https://github.com/chikiulo/yisi). 
+
 To get SES scores on a text or reproduce our correlation results on WMT18, you can run ses_score.py. We assume you have [LASER](https://github.com/facebookresearch/LASER) installed to tools/LASER/
 
 ### Files from anywhere
 If you simply want to run SES for a reference and hypothesis file:
-
+```
 python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --ref_lang ref_language --hyp_lang hyp_language
-
+```
 The flags --ref_lang and --hyp_lang are only necessary if you care about which language MOSES uses for tokenization.
 
 If you want to save the LASER encodings for later (faster) reevaluation:
-
+```
 python src/ses_score.py --ref ref_filepath --hyp hyp_filepath --save_ref --save_hyp
-
+```
 The LASER encodings will be saved to the same folder(s) as the reference or hypothesis files. 
 
 
