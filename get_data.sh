@@ -149,7 +149,7 @@ for FILENAME in news*gz; do
   OUTPUT="${FILENAME::-3}"
   if [ ! -f "$OUTPUT" ]; then
     echo "Decompressing $FILENAME..."
-    gunzip -k $FILENAME
+    gunzip < $FILENAME > $OUTPUT
   else
     echo "$OUTPUT already decompressed."
   fi
